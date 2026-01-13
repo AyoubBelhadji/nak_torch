@@ -7,13 +7,13 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 
-from tools import animate_trajectories_box
-from functions import mixture_of_gaussians
-from functions import himmelblau
+from nak_torch.tools import animate_trajectories_box
+from nak_torch.functions import mixture_of_gaussians
+from nak_torch.functions import himmelblau
 
-from algorithms import msip
-from algorithms import msip_ni
-from algorithms import msip_greedy
+from nak_torch.algorithms import msip
+from nak_torch.algorithms import msip_ni
+from nak_torch.algorithms import msip_greedy
 
 from datetime import datetime
 
@@ -22,7 +22,7 @@ from datetime import datetime
 
 
 
-# Define the density 
+# Define the density
 
 
 
@@ -34,16 +34,16 @@ if __name__ == "__main__":
     algorithm_name = "msip_ni"
     #function_name = "mixture_of_gaussians"
     #objective_function = mixture_of_gaussians
-    
+
     function_name = "himmelblau"
     objective_function = himmelblau(50.0)
 
     #trajectories, bounds = msip_greedy(objective_function,
     #    n_particles=5, n_steps=5000, dim=2, lr=0.2, noise_level_0=0.001,kernel_bandwidth = 1.2, seed=2, device="cpu"
     #)
-    
-    
-    # trajectories, bounds = msip_greedy(objective_function, 
+
+
+    # trajectories, bounds = msip_greedy(objective_function,
     #          n_particles=10,
     #          n_steps=1,          # now interpreted as "epochs" (passes over all particles)
     #          dim=2,
@@ -55,8 +55,8 @@ if __name__ == "__main__":
     #          max_inner_steps=1000,  # max inner iterations per particle
     #          seed=None,
     #          device="cpu")
-    
-    trajectories, bounds = msip_greedy(objective_function, 
+
+    trajectories, bounds = msip_greedy(objective_function,
              n_particles=10,
              n_steps=50,          # now interpreted as "epochs" (passes over all particles)
              dim=2,
@@ -69,8 +69,8 @@ if __name__ == "__main__":
              max_inner_steps=1000,  # max inner iterations per particle
              seed=None,
              device="cpu")
-    
-    # trajectories, bounds = msip_ni(objective_function, 
+
+    # trajectories, bounds = msip_ni(objective_function,
     #          n_particles=10,
     #          n_steps=1000,          # now interpreted as "epochs" (passes over all particles)
     #          dim=2,
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     #          kernel_bandwidth=0.45,
     #          seed=None,
     #          device="cpu")
-    
+
     #print(trajectories)
     if save_gif:
         bounds = [-15,15]
