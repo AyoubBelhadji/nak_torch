@@ -4,16 +4,8 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-
-
 from nak_torch.tools import animate_trajectories_box
-from nak_torch.functions import mixture_of_gaussians
-from nak_torch.functions import himmelblau
 from nak_torch.functions import loss_nn_dataset,plot_2D_classification_with_dataset_from_theta
-
-from nak_torch.algorithms import msip
-from nak_torch.algorithms import msip_ni
 from nak_torch.algorithms import msip_greedy
 
 from datetime import datetime
