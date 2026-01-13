@@ -10,10 +10,15 @@ import numpy as np
 import torch
 import copy
 from tqdm import tqdm
+from typing import Optional
 
 
 def recursive_weighted_average_alpha_v(
-        y, alpha, v=None, log_v=None, eps=1e-18
+        y: torch.Tensor,
+        alpha: torch.Tensor,
+        v: Optional[torch.Tensor] = None,
+        log_v: Optional[torch.Tensor] = None,
+        eps: float = 1e-18
 ):
     r"""
     Compute a stable weighted average $\sum v_i a_i y_i / \sum v_i a_i$ using log-weights
@@ -21,6 +26,10 @@ def recursive_weighted_average_alpha_v(
     alpha: (N,) the array of arbitrary weights
     v: (N,) or log_v: (N,) the array of postive weights
     """
+    N, d = y.shape
+    if alpha.ndim != 1 or N != alpha.shape[0]:
+        raise ValueError(f"Invalid alpha dimensions {alpha.shape}")
+
     y = torch.as_tensor(y)
     alpha = torch.as_tensor(alpha)
     device = y.device
@@ -43,6 +52,9 @@ def recursive_weighted_average_alpha_v(
         v = torch.ones_like(alpha)
         log_v = torch.zeros_like(alpha)
         # raise ValueError("Either v or log_v must be provided.")
+    if not (v is None or (v.ndim == 1 and v.shape[0] == N)) or \
+            not (log_v.ndim == 1 and log_v.shape[0] == N):
+        raise ValueError("Invalid dimensions")
 
     # Look for the non-vanishing a_i != 0, and restrict the average to those
     nonzero_alpha_mask = (alpha != 0)
@@ -81,10 +93,13 @@ def recursive_weighted_average_alpha_v(
 
 
 def msip_map(
-        objective_function, particles,
-        kernel_bandwidth=1.0, bandwidth_factor=0.5,
-        bounds=[0], projection=True,
-        gradient_informed=True
+        objective_function,
+        particles: torch.Tensor,
+        kernel_bandwidth: float = 1.0,
+        bandwidth_factor: float = 0.5,
+        bounds: tuple[float, float] = (-torch.inf, torch.inf),
+        projection: bool = True,
+        gradient_informed: bool = True
 ):
     """
     Compute the full MSIP map T(y) for all particles at once.
@@ -103,13 +118,12 @@ def msip_map(
     )
 
     particles_leaf = particles.detach().clone()
-    # print(particles)
     particles_leaf.requires_grad_(True)
 
     fitness = objective_function(particles_leaf)   # shape (N,)
+    grads = None
     if gradient_informed:
         grads, = torch.autograd.grad(fitness.sum(), particles_leaf)
-    # f_times_y = fitness.unsqueeze(-1) * particles_leaf
 
     with torch.no_grad():
         diff = particles_leaf.unsqueeze(1) - \
@@ -155,17 +169,19 @@ def msip_map(
     return t_arr
 
 
-def update_one_particle(objective_function,
-                        particles,
-                        idx,
-                        lr=0.1,
-                        kernel_bandwidth=1.0,
-                        bandwidth_factor=0.5,
-                        inner_tol=1e-4,
-                        max_inner_steps=50,
-                        bounds=[0],
-                        projection=True,
-                        gradient_informed=True):
+def update_one_particle(
+        objective_function,
+        particles: torch.Tensor,
+        idx: int,
+        lr: float = 0.1,
+        kernel_bandwidth: float = 1.0,
+        bandwidth_factor: float = 0.5,
+        inner_tol: float = 1e-4,
+        max_inner_steps: int = 50,
+        bounds: tuple[float, float] = (-torch.inf, torch.inf),
+        projection: bool = True,
+        gradient_informed: bool = True
+):
     """
     Coordinate-wise MSIP update:
     - All particles are kept fixed except particle `idx`
@@ -174,13 +190,15 @@ def update_one_particle(objective_function,
     Mutates `particles` in-place and returns it.
     """
 
-    new_list_particles = [copy.deepcopy(particles)]
+    new_list_particles = [particles.detach().cpu().numpy()]
     for _ in range(max_inner_steps):
         # Compute full MSIP map given current particles
 
-        t_arr = msip_map(objective_function, particles,
-                         kernel_bandwidth=kernel_bandwidth, bounds=bounds,
-                         projection=projection, gradient_informed=gradient_informed)
+        t_arr = msip_map(
+            objective_function, particles,
+            kernel_bandwidth=kernel_bandwidth, bounds=bounds,
+            projection=projection, gradient_informed=gradient_informed
+        )
 
         with torch.no_grad():
             old_pos = particles[idx].clone()
@@ -188,11 +206,13 @@ def update_one_particle(objective_function,
 
             move_norm = (new_pos - old_pos).norm()
             particles[idx].copy_(new_pos)
-            new_list_particles.append(copy.deepcopy(
-                particles.detach().cpu().numpy()))
+            new_list_particles.append(
+                particles.detach().cpu().numpy().copy()
+            )
 
         if move_norm.isnan():
             print('nan')
+
         if move_norm.item() < inner_tol:
             break
 
@@ -201,29 +221,36 @@ def update_one_particle(objective_function,
 
 def msip_greedy(
     objective_function,
-    n_particles=50,
+    n_particles: int = 50,
     # now interpreted as "epochs" (passes over all particles)
-    n_steps=10,
-    dim=2,
-    bounds=[-5, 5],
-    gradient_informed=True,
-    projection=True,
-    lr=0.1,
-    noise=0.05,          # currently unused, kept for compatibility
-    kernel_bandwidth=1.0,
-    bandwidth_factor=0.5,
-    inner_tol=1e-4,      # equilibrium tolerance for a particle
-    max_inner_steps=50,  # max inner iterations per particle
-    seed=None,
-    device="cpu"
+    n_steps: int = 10,
+    dim: int = 2,
+    bounds: tuple[float, float] = (-5, 5),
+    gradient_informed: bool = True,
+    projection: bool = True,
+    lr: float = 0.1,
+    noise: float = 0.05,          # currently unused, kept for compatibility
+    kernel_bandwidth: float = 1.0,
+    bandwidth_factor: float = 0.5,
+    inner_tol: float = 1e-4,      # equilibrium tolerance for a particle
+    max_inner_steps: int = 50,  # max inner iterations per particle
+    seed: Optional[int] = None,
+    device: str = "cpu",
+    init_particles: Optional[torch.Tensor | np.ndarray] = None
 ):
 
     if seed is not None:
         torch.manual_seed(seed)
 
-    # Init particles
-    particles = (bounds[1] - bounds[0]) * \
-        torch.rand((n_particles, dim), device=device) + bounds[0]
+    if init_particles is None:
+        # Init particles
+        particles = (bounds[1] - bounds[0]) * \
+            torch.rand((n_particles, dim), device=device) + bounds[0]
+    elif isinstance(init_particles, np.ndarray):
+        particles = torch.tensor(init_particles, device=device)
+    else:
+        particles = init_particles.clone()
+
     trajectories = [particles.detach().cpu().numpy().copy()]
 
     # Outer loop: epochs
