@@ -7,7 +7,6 @@
 # Ayoub Belhadji
 # 05/12/2025
 
-import numpy as np
 import torch
 
 

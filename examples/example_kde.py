@@ -28,7 +28,7 @@ if __name__ == "__main__":
     trajectories, _ = msip_greedy(
         objective_function,
         n_particles=25,
-        n_steps=40,          # "epochs" (passes over all particles)
+        n_steps=40, # "epochs" (passes over all particles)
         dim=2,
         bounds=(-4, 4),   # [a,b]^d
         gradient_informed = True,

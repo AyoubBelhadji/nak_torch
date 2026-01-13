@@ -29,5 +29,9 @@ if __name__ == "__main__":
 
     if save_gif:
         bounds = [-15,15]
-        animate_trajectories_box(objective_function, trajectories, 50, bounds, save_path="results/gif/"+algorithm_name+"_"+function_name+"_particles_"+str(now_stamp)+".gif")
+        fpath = f"results/gif/{algorithm_name}_{function_name}_particles_{now_stamp}.gif"
+        animate_trajectories_box(
+            objective_function, trajectories, 50, bounds,
+            save_path=fpath
+        )
 
