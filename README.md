@@ -1,1 +1,1 @@
-# msip-wfr
+# Kernel-based quantization algorithms
