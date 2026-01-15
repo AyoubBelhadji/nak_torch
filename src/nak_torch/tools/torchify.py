@@ -12,7 +12,7 @@ def create_differentiable_density(
         tensor_transform = lambda x: x  # noqa: E731
 
     if tensor_inverse_transform is None:
-        tensor_inverse_transform = torch.tensor
+        tensor_inverse_transform = torch.as_tensor
 
     class Density(torch.autograd.Function):
         """

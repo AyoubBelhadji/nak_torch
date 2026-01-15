@@ -99,14 +99,16 @@ def msip_map(
         bandwidth_factor: float = 0.5,
         bounds: tuple[float, float] = (-torch.inf, torch.inf),
         projection: bool = True,
-        gradient_informed: bool = True
+        gradient_informed: bool = True,
+        output_idx: Optional[int] = None,
+        diag_infl: float = 0.0
 ):
     """
     Compute the full MSIP map T(y) for all particles at once.
     Returns t_arr with shape (N, d).
     """
+    n_particles = particles.shape[0]
     # Make sure this is a leaf with grad
-
     lower_bounds = torch.as_tensor(
         bounds[0], dtype=particles[0].dtype,
         device=particles[0].device
@@ -132,39 +134,42 @@ def msip_map(
         sigma2 = kernel_bandwidth ** 2
         # (N, N)
         kernel_matrix = torch.exp(- (diff ** 2).sum(dim=-1) / sigma2)
+        if diag_infl > 0:
+            kernel_matrix[torch.arange(n_particles), torch.arange(n_particles)] += diag_infl
 
-        K_minus_one = torch.linalg.inv(kernel_matrix)
+        K_minus_one = torch.linalg.pinv(kernel_matrix)
 
         N, d = particles_leaf.shape
-        t_list = []
-        for i in range(N):
+        def apply_msip_once(i: int):
             alpha_i = K_minus_one[i, :]  # (N,)
 
             t1 = recursive_weighted_average_alpha_v(
                 particles, alpha_i, log_v=fitness
             )
             if gradient_informed:
+                assert grads is not None
                 t2 = recursive_weighted_average_alpha_v(
                     grads, alpha_i, log_v=fitness
                 )
                 if projection:
-                    t_list.append(torch.clamp(
+                    return torch.clamp(
                         t1 + bandwidth_factor * bandwidth_factor * sigma2 * t2,
                         min=lower_bounds, max=upper_bounds
-                    ))
-                else:
-                    t_list.append(
-                        t1 + bandwidth_factor *
-                        bandwidth_factor * sigma2 * t2
                     )
+                else:
+                    return t1 + bandwidth_factor * bandwidth_factor * sigma2 * t2
             else:
                 if projection:
-                    t_list.append(torch.clamp(
+                    return torch.clamp(
                         t1, min=lower_bounds, max=upper_bounds
-                    ))
+                    )
                 else:
-                    t_list.append(t1)
-        t_arr = torch.stack(t_list, dim=0)  # (N, d)
+                    return t1
+        if output_idx is None:
+            t_list = [apply_msip_once(i) for i in range(N)]
+            t_arr = torch.stack(t_list, dim=0)  # (N, d)
+        else:
+            t_arr = apply_msip_once(output_idx)
 
     return t_arr
 
@@ -180,7 +185,8 @@ def update_one_particle(
         max_inner_steps: int = 50,
         bounds: tuple[float, float] = (-torch.inf, torch.inf),
         projection: bool = True,
-        gradient_informed: bool = True
+        gradient_informed: bool = True,
+        diag_infl: float = 0.0
 ):
     """
     Coordinate-wise MSIP update:
@@ -197,12 +203,14 @@ def update_one_particle(
         t_arr = msip_map(
             objective_function, particles,
             kernel_bandwidth=kernel_bandwidth, bounds=bounds,
-            projection=projection, gradient_informed=gradient_informed
+            projection=projection, gradient_informed=gradient_informed,
+            output_idx=idx, bandwidth_factor=bandwidth_factor,
+            diag_infl=diag_infl
         )
 
         with torch.no_grad():
-            old_pos = particles[idx].clone()
-            new_pos = (1.0 - lr) * old_pos + lr * t_arr[idx]
+            old_pos = particles[idx]
+            new_pos = (1.0 - lr) * old_pos + lr * t_arr
 
             move_norm = (new_pos - old_pos).norm()
             particles[idx].copy_(new_pos)
@@ -235,8 +243,9 @@ def msip_greedy(
     inner_tol: float = 1e-4,      # equilibrium tolerance for a particle
     max_inner_steps: int = 50,  # max inner iterations per particle
     seed: Optional[int] = None,
-    device: str = "cpu",
-    init_particles: Optional[torch.Tensor | np.ndarray] = None
+    device: str | torch.device = "cpu",
+    init_particles: Optional[torch.Tensor | np.ndarray] = None,
+    diag_infl: float = 0.0
 ):
 
     if seed is not None:
@@ -254,7 +263,8 @@ def msip_greedy(
     trajectories = [particles.detach().cpu().numpy().copy()]
 
     # Outer loop: epochs
-    for _ in tqdm(range(n_steps)):
+    pbar = tqdm(total=n_steps*n_particles)
+    for _ in range(n_steps):
         # Loop over particles, one at a time
         for i in range(n_particles):
             new_list_particles = update_one_particle(
@@ -266,11 +276,13 @@ def msip_greedy(
                 bandwidth_factor=bandwidth_factor,
                 inner_tol=inner_tol,
                 max_inner_steps=max_inner_steps, bounds=bounds, projection=projection,
-                gradient_informed=gradient_informed
+                gradient_informed=gradient_informed,
+                diag_infl=diag_infl
             )
             # If you want a very fine-grained trajectory, record after each particle:
             # trajectories.append(particles.detach().cpu().numpy().copy())
             trajectories = trajectories + new_list_particles
+            pbar.update()
 
         # If you prefer only one snapshot per epoch, move the append here instead:
         # trajectories.append(particles.detach().cpu().numpy().copy())
