@@ -1,4 +1,5 @@
 # %%
+import math
 import torch
 from nak_torch.tools import animate_trajectories_box
 from nak_torch.functions import aristoff_bangerth as ab, build_aristoff_bangerth
@@ -26,24 +27,25 @@ test_out = log_p(log_th)
 test_eval = torch.autograd.grad(test_out.sum(), log_th)
 
 # %%
-n_particles = 16
+n_particles = 25
+torch.manual_seed(1)
 init_particles = 2 * torch.randn((n_particles, 64),
                                  dtype=torch.float64, device='cpu')  # Sample from prior
 trajectories, _ = msip_greedy(
     log_p,
     n_particles=n_particles,
-    n_steps=50,  # "epochs" (passes over all particles)
+    n_steps=100,  # "epochs" (passes over all particles)
     dim=64,
     bounds=(-8, 8),   # [a,b]^d
     gradient_informed=True,
     projection=True,
-    lr=0.8,
+    lr=0.5,
     # noise=0.05,          # currently unused
     init_particles=init_particles,
-    kernel_bandwidth=0.6,
-    bandwidth_factor=0.5,
+    kernel_bandwidth=0.2,
+    bandwidth_factor=0.3,
     inner_tol=1e-6,      # equilibrium tolerance for a particle
-    max_inner_steps=5,  # max inner iterations per particle
+    max_inner_steps=1,  # max inner iterations per particle
     seed=0,
     # diag_infl=1e-5,
     device="cpu"
@@ -57,7 +59,7 @@ H_vis = ab.build_forward_solver_args(N_solver, N_viz)[0]
 # %%
 pts = trajectories[-1]
 fig = plt.figure(figsize=(10, 6), layout='constrained')
-side_len = 4
+side_len = int(math.sqrt(n_particles))
 gs = fig.add_gridspec(side_len, side_len + 2)
 plt_kwargs = {'vmin': pts.min(), 'vmax': pts.max(), 'extent': (0, 8, 0, 8)}
 
@@ -95,4 +97,5 @@ ax_true.tick_params(which="minor", length=0)
 plt.show()
 
 # %%
-plt.imshow(torch.mean(torch.tensor(trajectories[1000]), 0).reshape(8, 8))
+im = plt.imshow(torch.mean(torch.tensor(trajectories[-1]), 0).reshape(8, 8))
+plt.colorbar(im)

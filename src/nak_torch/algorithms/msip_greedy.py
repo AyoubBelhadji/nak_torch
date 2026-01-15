@@ -10,7 +10,7 @@ import numpy as np
 import torch
 import copy
 from tqdm import tqdm
-from typing import Optional
+from typing import Optional, Callable
 
 
 def recursive_weighted_average_alpha_v(
@@ -91,6 +91,12 @@ def recursive_weighted_average_alpha_v(
 
     return weighted_average
 
+def gaussian_kernel_matrix(particles_leaf, sigma2):
+    diff = particles_leaf.unsqueeze(1) - \
+                particles_leaf.unsqueeze(0)  # (N, N, d)
+
+    return torch.exp(- (diff ** 2).sum(dim=-1) / sigma2)
+
 
 def msip_map(
         objective_function,
@@ -101,7 +107,8 @@ def msip_map(
         projection: bool = True,
         gradient_informed: bool = True,
         output_idx: Optional[int] = None,
-        diag_infl: float = 0.0
+        diag_infl: float = 0.0,
+        get_kernel_matrix: Callable[[torch.Tensor, float], torch.Tensor] = gaussian_kernel_matrix
 ):
     """
     Compute the full MSIP map T(y) for all particles at once.
@@ -128,17 +135,18 @@ def msip_map(
         grads, = torch.autograd.grad(fitness.sum(), particles_leaf)
 
     with torch.no_grad():
-        diff = particles_leaf.unsqueeze(1) - \
-            particles_leaf.unsqueeze(0)  # (N, N, d)
-
-        sigma2 = kernel_bandwidth ** 2
         # (N, N)
-        kernel_matrix = torch.exp(- (diff ** 2).sum(dim=-1) / sigma2)
+        kernel_matrix = None
+        sigma2 = kernel_bandwidth ** 2
+        kernel_matrix = get_kernel_matrix(particles_leaf, sigma2)
+
         if diag_infl > 0:
             kernel_matrix[torch.arange(n_particles), torch.arange(n_particles)] += diag_infl
 
-        K_minus_one = torch.linalg.pinv(kernel_matrix)
-
+        if diag_infl > 0.: # We know it's invertible if diag is inflated
+            K_minus_one = torch.linalg.inv(kernel_matrix)
+        else:
+            K_minus_one = torch.linalg.pinv(kernel_matrix)
         N, d = particles_leaf.shape
         def apply_msip_once(i: int):
             alpha_i = K_minus_one[i, :]  # (N,)
@@ -287,4 +295,4 @@ def msip_greedy(
         # If you prefer only one snapshot per epoch, move the append here instead:
         # trajectories.append(particles.detach().cpu().numpy().copy())
 
-    return np.array(trajectories), bounds
+    return torch.tensor(trajectories), bounds
