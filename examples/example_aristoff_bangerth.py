@@ -31,6 +31,7 @@ n_particles = 25
 torch.manual_seed(1)
 init_particles = 2 * torch.randn((n_particles, 64),
                                  dtype=torch.float64, device='cpu')  # Sample from prior
+kernel_bandwidth=0.2
 trajectories, _ = msip_greedy(
     log_p,
     n_particles=n_particles,
@@ -39,22 +40,17 @@ trajectories, _ = msip_greedy(
     bounds=(-8, 8),   # [a,b]^d
     gradient_informed=True,
     projection=True,
-    lr=0.5,
+    lr=0.8,
     # noise=0.05,          # currently unused
     init_particles=init_particles,
-    kernel_bandwidth=0.2,
-    bandwidth_factor=0.3,
+    kernel_bandwidth=kernel_bandwidth,
+    bandwidth_factor=0.5,
     inner_tol=1e-6,      # equilibrium tolerance for a particle
     max_inner_steps=1,  # max inner iterations per particle
     seed=0,
-    # diag_infl=1e-5,
+    diag_infl=1e-5,
     device="cpu"
 )
-
-# %%
-N_solver, N_viz = 32, 128
-last_state = trajectories[-1]
-H_vis = ab.build_forward_solver_args(N_solver, N_viz)[0]
 
 # %%
 pts = trajectories[-1]
@@ -97,5 +93,32 @@ ax_true.tick_params(which="minor", length=0)
 plt.show()
 
 # %%
-im = plt.imshow(torch.mean(torch.tensor(trajectories[-1]), 0).reshape(8, 8))
+pts = trajectories[1000]
+im = plt.imshow(torch.mean(torch.tensor(pts), 0).reshape(8, 8), vmin=-3, vmax=3)
 plt.colorbar(im)
+
+# %%
+theta_true = torch.as_tensor(ab.theta_true, dtype=init_particles.dtype)
+T_idx = 750
+thetas = torch.exp(torch.tensor(trajectories[T_idx]))
+N_solver, N_viz = 32, 128
+solve_args = ab.build_forward_solver_args(N_solver, N_viz, dtype=thetas.dtype)
+H_obs = solve_args[0]
+u_true = ab.forward_solver(theta_true, N_solver, *solve_args)
+u_solve = ab.forward_solver(thetas, N_solver, *solve_args)
+# u_viz = H_obs
+z_true = (H_obs @ u_true)
+z_viz = (u_solve @ H_obs.T)
+
+# %%
+# viz_grid = torch.linspace(0, 1, N_viz)
+fig, axs = plt.subplots(1, 2, figsize=(8, 4))
+sample_idx = 5
+z_viz_mean = z_viz.mean(0)
+axs[0].imshow(z_viz_mean.reshape(N_viz, N_viz).detach().numpy())
+axs[0].set_title("Posterior predictive mean")
+axs[1].imshow(z_true.reshape(N_viz, N_viz).detach().numpy())
+axs[1].set_title("True simulation")
+plt.show()
+
+# %%

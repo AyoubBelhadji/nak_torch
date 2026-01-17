@@ -204,7 +204,7 @@ def update_one_particle(
     Mutates `particles` in-place and returns it.
     """
 
-    new_list_particles = [particles.detach().cpu().numpy()]
+    new_list_particles = []
     for _ in range(max_inner_steps):
         # Compute full MSIP map given current particles
 
