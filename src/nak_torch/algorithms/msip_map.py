@@ -3,6 +3,7 @@ import torch
 from typing import Optional, Callable
 from .average import recursive_weighted_average_alpha_v
 from .kernel import gaussian_kernel_matrix
+from tqdm import tqdm
 
 def msip_map(
         objective_function,
@@ -15,6 +16,7 @@ def msip_map(
         diag_infl: float = 0.0,
         output_idx: Optional[int] = None,
         get_kernel_matrix: Callable[[torch.Tensor, float], torch.Tensor] = gaussian_kernel_matrix,
+        progress_bar: Optional[tqdm] = None
 ):
     """
     Compute the full MSIP map T(y) for all particles at once.
@@ -42,7 +44,6 @@ def msip_map(
 
     with torch.no_grad():
         # (N, N)
-        kernel_matrix = None
         sigma2 = kernel_bandwidth ** 2
         kernel_matrix = get_kernel_matrix(particles_leaf, sigma2)
 
@@ -54,7 +55,7 @@ def msip_map(
         else:
             K_minus_one = torch.linalg.pinv(kernel_matrix)
         N, d = particles_leaf.shape
-        def apply_msip_once(i: int):
+        def apply_msip_once(out: torch.Tensor, i: int):
             alpha_i = K_minus_one[i, :]  # (N,)
 
             t1 = recursive_weighted_average_alpha_v(
@@ -66,23 +67,27 @@ def msip_map(
                     grads, alpha_i, log_v=fitness
                 )
                 if projection:
-                    return torch.clamp(
+                    torch.clamp(
                         t1 + bandwidth_factor * bandwidth_factor * sigma2 * t2,
-                        min=lower_bounds, max=upper_bounds
+                        min=lower_bounds, max=upper_bounds, out=out
                     )
                 else:
-                    return t1 + bandwidth_factor * bandwidth_factor * sigma2 * t2
+                    torch.add(t1, bandwidth_factor * bandwidth_factor * sigma2 * t2, out=out)
             else:
                 if projection:
-                    return torch.clamp(
-                        t1, min=lower_bounds, max=upper_bounds
+                    torch.clamp(
+                        t1, min=lower_bounds, max=upper_bounds, out=out
                     )
                 else:
-                    return t1
+                    out.copy_(t1)
         if output_idx is None:
-            t_list = [apply_msip_once(i) for i in range(N)]
-            t_arr = torch.stack(t_list, dim=0)  # (N, d)
+            t_arr = torch.empty_like(particles)
+            for idx in range(N):
+                apply_msip_once(t_arr[idx], idx)
+                if progress_bar is not None:
+                    progress_bar.update()
         else:
-            t_arr = apply_msip_once(output_idx)
+            t_arr = torch.empty_like(particles[0])
+            apply_msip_once(t_arr, output_idx)
 
     return t_arr

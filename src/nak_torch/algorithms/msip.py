@@ -10,6 +10,7 @@ import numpy as np
 import torch
 from .msip_map import msip_map
 from typing import Optional
+from tqdm import tqdm
 
 def msip(objective_function,
     n_particles=50,
@@ -20,6 +21,7 @@ def msip(objective_function,
     seed=None,
     device="cpu",
     init_particles: Optional[torch.Tensor | np.ndarray] = None,
+    keep_all: bool = True,
     # kernel_bandwidth = 1.0,
     # bandwidth_factor = 0.5,
     # bounds=(-5, 5),
@@ -36,21 +38,28 @@ def msip(objective_function,
         else:
             particles = (bounds[1] - bounds[0]) * torch.rand((n_particles, dim), device=device) + 1.5*bounds[0]
     else:
-        particles = torch.tensor(init_particles, device=device)
+        particles = torch.as_tensor(init_particles, device=device)
+    if keep_all:
+        trajectories = [particles.detach().cpu().numpy().copy()]
+    else:
+        trajectories = []
 
-    trajectories = [particles.detach().cpu().numpy().copy()]
+    progress_bar = tqdm(range(n_particles*n_steps))
 
     for _ in range(n_steps):
         particles_diff = msip_map(
             objective_function,
             particles,
             output_idx=None,
+            progress_bar=progress_bar,
             **msip_kwargs
         )
 
         with torch.no_grad():
             particles = (1.0 - lr) * particles + lr * particles_diff
-
-        trajectories.append(particles.detach().cpu().numpy().copy())
-
-    return np.array(trajectories), bounds
+        if keep_all:
+            trajectories.append(particles.detach().cpu().numpy().copy())
+    if keep_all:
+        return np.array(trajectories), bounds
+    else:
+        return particles.unsqueeze_(0), bounds

@@ -1,11 +1,11 @@
 # %%
 import math
 import torch
-from nak_torch.tools import animate_trajectories_box
 from nak_torch.functions import aristoff_bangerth as ab, build_aristoff_bangerth
-from nak_torch.algorithms import msip_greedy
+from nak_torch.algorithms import msip
 from matplotlib import ticker
 import matplotlib.pyplot as plt
+import numpy as np
 torch.set_default_device("cpu")
 
 # # %%
@@ -27,44 +27,47 @@ test_out = log_p(log_th)
 test_eval = torch.autograd.grad(test_out.sum(), log_th)
 
 # %%
-n_particles = 25
+n_particles = 500
 torch.manual_seed(1)
 init_particles = 2 * torch.randn((n_particles, 64),
                                  dtype=torch.float64, device='cpu')  # Sample from prior
-kernel_bandwidth=0.2
-trajectories, _ = msip_greedy(
+kernel_bandwidth = 0.5
+
+trajectories, _ = msip(
     log_p,
     n_particles=n_particles,
-    n_steps=100,  # "epochs" (passes over all particles)
+    n_steps=25,  # "epochs" (passes over all particles)
     dim=64,
     bounds=(-8, 8),   # [a,b]^d
     gradient_informed=True,
     projection=True,
-    lr=0.8,
+    lr=1e-1,
     # noise=0.05,          # currently unused
     init_particles=init_particles,
     kernel_bandwidth=kernel_bandwidth,
-    bandwidth_factor=0.5,
-    inner_tol=1e-6,      # equilibrium tolerance for a particle
-    max_inner_steps=1,  # max inner iterations per particle
+    bandwidth_factor=0.75,
+    # inner_tol=1e-6,      # equilibrium tolerance for a particle
+    # max_inner_steps=1,  # max inner iterations per particle
     seed=0,
-    diag_infl=1e-5,
-    device="cpu"
+    diag_infl=1e-10,
+    device="cpu",
+    keep_all=False
 )
 
 # %%
-pts = trajectories[-1]
-fig = plt.figure(figsize=(10, 6), layout='constrained')
-side_len = int(math.sqrt(n_particles))
+side_len = min(6, int(math.floor(math.sqrt(n_particles))))
+pts = trajectories[-1][:side_len**2]# - init_particles[:side_len**2]
+fig = plt.figure(figsize=(9, 6), layout='constrained')
 gs = fig.add_gridspec(side_len, side_len + 2)
-plt_kwargs = {'vmin': pts.min(), 'vmax': pts.max(), 'extent': (0, 8, 0, 8)}
+vabs = max(pts.min().abs(), pts.max().abs())
+plt_kwargs = {'vmin': -vabs, 'vmax': vabs, 'extent': (0, 8, 0, 8)}
 
 for i in range(side_len):
     for j in range(side_len):
         ax = fig.add_subplot(gs[i, j])
         # ax.set_axis_off()
         ax.set_aspect('equal')
-        t = ax.matshow(pts[i*4 + j].reshape(8, 8), **plt_kwargs)
+        t = ax.matshow(pts[i*side_len + j].reshape(8, 8), **plt_kwargs)
         # ax.vlines(jnp.arange(1,8), -0.1, 8.1, color='w', lw=0.75)
         # ax.hlines(jnp.arange(1,8), -0.1, 8.1, color='w', lw=0.75)
         ax.minorticks_on()
@@ -91,6 +94,12 @@ ax_true.set_title(r"True $\theta$")
 ax_true.grid(which="both", linewidth=1.5, color="w")
 ax_true.tick_params(which="minor", length=0)
 plt.show()
+
+# %%
+pts
+
+# %%
+np.linalg.norm(trajectories[4] - trajectories[3])
 
 # %%
 pts = trajectories[1000]
