@@ -96,38 +96,36 @@ ax_true.tick_params(which="minor", length=0)
 plt.show()
 
 # %%
-pts
+from nak_torch.tools import ksd
+from functools import partial
+def grad_log_p(pts: torch.Tensor):
+    pts_grad = pts.clone()
+    pts_grad.requires_grad_()
+    fitness = log_p(pts_grad)   # shape (N,)
+    grads, = torch.autograd.grad(fitness.sum(), pts_grad)
+    return grads
+# grad_log_p = torch.func.grad(lambda x: log_p(x).sum())
+ksd_kernel = partial(ksd.gaussian_kernel_elem, sigma_sq = 0.1)
+
+stein_kernel = ksd.build_stein_kernel(grad_log_p, ksd_kernel, is_grad_vectorized=True)
 
 # %%
-np.linalg.norm(trajectories[4] - trajectories[3])
+from nak_torch.algorithms.kernel import gaussian_kernel_matrix
+pts = trajectories[-1]
+kernel_mat = gaussian_kernel_matrix(pts, kernel_bandwidth)
+log_p_evals = log_p(pts)
+log_p_evals -= log_p_evals.max()
+wts = torch.linalg.lstsq(kernel_mat, log_p_evals.exp()).solution
+norm_wts = wts / wts.sum()
+simplex_wts = torch.linalg.lstsq(kernel_mat, torch.ones_like(wts)).solution
+simplex_wts /= simplex_wts.sum()
+stein_mat = stein_kernel(pts)
 
 # %%
-pts = trajectories[1000]
-im = plt.imshow(torch.mean(torch.tensor(pts), 0).reshape(8, 8), vmin=-3, vmax=3)
-plt.colorbar(im)
-
-# %%
-theta_true = torch.as_tensor(ab.theta_true, dtype=init_particles.dtype)
-T_idx = 750
-thetas = torch.exp(torch.tensor(trajectories[T_idx]))
-N_solver, N_viz = 32, 128
-solve_args = ab.build_forward_solver_args(N_solver, N_viz, dtype=thetas.dtype)
-H_obs = solve_args[0]
-u_true = ab.forward_solver(theta_true, N_solver, *solve_args)
-u_solve = ab.forward_solver(thetas, N_solver, *solve_args)
-# u_viz = H_obs
-z_true = (H_obs @ u_true)
-z_viz = (u_solve @ H_obs.T)
-
-# %%
-# viz_grid = torch.linspace(0, 1, N_viz)
-fig, axs = plt.subplots(1, 2, figsize=(8, 4))
-sample_idx = 5
-z_viz_mean = z_viz.mean(0)
-axs[0].imshow(z_viz_mean.reshape(N_viz, N_viz).detach().numpy())
-axs[0].set_title("Posterior predictive mean")
-axs[1].imshow(z_true.reshape(N_viz, N_viz).detach().numpy())
-axs[1].set_title("True simulation")
-plt.show()
-
-# %%
+ksd_ev_unif = (stein_mat.sum() / (pts.shape[0]**2)).sqrt()
+ksd_ev_wt = torch.sqrt((stein_mat @ wts) @ wts)
+ksd_ev_norm_wt = torch.sqrt((stein_mat @ norm_wts) @ norm_wts)
+ksd_ev_simplex_wt = torch.sqrt((stein_mat @ simplex_wts) @ simplex_wts)
+print("KSD: unif = {}\nweighted = {}\nnormalized weighted = {}\nprojected weighted = {}".format(
+    ksd_ev_unif, ksd_ev_wt, ksd_ev_norm_wt, ksd_ev_simplex_wt
+))
