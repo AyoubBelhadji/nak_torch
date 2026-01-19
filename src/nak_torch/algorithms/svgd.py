@@ -6,6 +6,7 @@
 # Ayoub Belhadji
 # 05/12/2025
 
+import warnings
 import numpy as np
 import torch
 from typing import Optional
@@ -24,8 +25,8 @@ def create_svgd_step(
         lambda x,y: kernel_elem(x, y, bandwidth), argnums=1
     )
     kernel_grad_val_vec = torch.vmap(
-        torch.vmap(kernel_grad_val, in_dims=(None, 0, None)),
-        in_dims=(0, None, None)
+        torch.vmap(kernel_grad_val, in_dims=(None, 0)),
+        in_dims=(0, None)
     )
     def svgd_step_dir(points: Float[Tensor, "batch d"]):
         # kg[i,j,k] = grad_2(k) k(x_i, x_j), k[j,i] = k(x_i, x_j)
@@ -53,10 +54,16 @@ def svgd(
     bounds: Optional[tuple[float, float]] = None,
     keep_all: bool = True,
     is_objective_vectorized: bool = False,
-    grad_log_density: Optional[VecGradLogDensity] = None
+    grad_log_density: Optional[VecGradLogDensity] = None,
+    **unused_kwargs
 ):
+    if len(unused_kwargs) > 0:
+        warnings.warn("Unused kwargs:\n{}".format(unused_kwargs))
+
     if seed is not None:
         torch.manual_seed(seed)
+
+    particles: Tensor
     if init_particles is None:
         if bounds is None:
             particles = torch.randn((n_particles, dim), device=device)
@@ -70,13 +77,13 @@ def svgd(
     else:
         trajectories = torch.empty(())
 
-    grad_log_p = None
+    grad_log_p: VecGradLogDensity
     kernel_fcn: KernelType = sqexp_kernel_elem if kernel_elem is None else kernel_elem
     if grad_log_density is None:
         if is_objective_vectorized:
             def grad_log_p_(pts: Float[Tensor, "batch dim"])-> Float[Tensor, "batch dim"]:
                 pts_cl = pts.clone().requires_grad_()
-                return torch.autograd.grad(log_density(pts_cl), pts_cl)[0]
+                return torch.autograd.grad(log_density(pts_cl).sum(), pts_cl)[0]
             grad_log_p = grad_log_p_
         else:
             grad_log_p = torch.vmap(torch.func.grad(log_density))
@@ -89,8 +96,11 @@ def svgd(
         particles_diff = step_fcn(particles)
         with torch.no_grad():
             particles = (1.0 - lr) * particles + lr * particles_diff
+            if bounds is not None:
+                particles.clamp_(bounds[0], bounds[1])
         if keep_all:
             trajectories[idx].copy_(particles)
+
     if keep_all:
         return trajectories, bounds
     else:

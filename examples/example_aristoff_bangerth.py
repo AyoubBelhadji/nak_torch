@@ -2,10 +2,9 @@
 import math
 import torch
 from nak_torch.functions import aristoff_bangerth as ab, build_aristoff_bangerth
-from nak_torch.algorithms import msip
+from nak_torch.algorithms import msip, svgd
 from matplotlib import ticker
 import matplotlib.pyplot as plt
-import numpy as np
 torch.set_default_device("cpu")
 
 # # %%
@@ -27,36 +26,65 @@ test_out = log_p(log_th)
 test_eval = torch.autograd.grad(test_out.sum(), log_th)
 
 # %%
-n_particles = 500
-torch.manual_seed(1)
-init_particles = 2 * torch.randn((n_particles, 64),
-                                 dtype=torch.float64, device='cpu')  # Sample from prior
-kernel_bandwidth = 0.5
+n_particles, n_steps, dim = 500, 25, 64
+kernel_bandwidth = 0.75
 
-trajectories, _ = msip(
+torch.manual_seed(1)
+init_particles = 2 * torch.randn(
+    (n_particles, dim),
+    dtype=torch.float64,
+    device='cpu'
+)  # Sample from prior
+
+msip_args = {
+    "n_particles": n_particles,
+    "n_steps": n_steps,  # "epochs" (passes over all particles)
+    "dim": 64,
+    "bounds": (-8, 8),   # [a,b]^d
+    "gradient_informed": True,
+    "lr": 1e-1,
+    "noise": 0.05,          # currently unused
+    "init_particles": init_particles,
+    "kernel_bandwidth": kernel_bandwidth,
+    "bandwidth_factor": 0.5,
+    "seed": 0,
+    "diag_infl": 1e-10,
+    "device": "cpu",
+    "keep_all": False
+}
+
+# %%
+trajectories_msip, _ = msip(
     log_p,
-    n_particles=n_particles,
-    n_steps=25,  # "epochs" (passes over all particles)
-    dim=64,
-    bounds=(-8, 8),   # [a,b]^d
-    gradient_informed=True,
-    projection=True,
-    lr=1e-1,
+    **msip_args
+    # n_particles=n_particles,
+    # n_steps=n_steps,  # "epochs" (passes over all particles)
+    # dim=64,
+    # bounds=(-8, 8),   # [a,b]^d
+    # gradient_informed=True,
+    # lr=1e-1,
     # noise=0.05,          # currently unused
-    init_particles=init_particles,
-    kernel_bandwidth=kernel_bandwidth,
-    bandwidth_factor=0.75,
+    # init_particles=init_particles,
+    # kernel_bandwidth=kernel_bandwidth,
+    # bandwidth_factor=0.75,
     # inner_tol=1e-6,      # equilibrium tolerance for a particle
     # max_inner_steps=1,  # max inner iterations per particle
-    seed=0,
-    diag_infl=1e-10,
-    device="cpu",
-    keep_all=False
+    # seed=0,
+    # diag_infl=1e-10,
+    # device="cpu",
+    # keep_all=False
+)
+
+# %%
+trajectories_svgd, _ = svgd(
+    log_p,
+    is_objective_vectorized=True,
+    **msip_args
 )
 
 # %%
 side_len = min(6, int(math.floor(math.sqrt(n_particles))))
-pts = trajectories[-1][:side_len**2]# - init_particles[:side_len**2]
+pts = trajectories_msip[-1][:side_len**2]# - init_particles[:side_len**2]
 fig = plt.figure(figsize=(9, 6), layout='constrained')
 gs = fig.add_gridspec(side_len, side_len + 2)
 vabs = max(pts.min().abs(), pts.max().abs())
@@ -96,7 +124,7 @@ ax_true.tick_params(which="minor", length=0)
 plt.show()
 
 # %%
-from nak_torch.tools import ksd
+from nak_torch.tools import ksd, kernel
 from functools import partial
 def grad_log_p(pts: torch.Tensor):
     pts_grad = pts.clone()
@@ -106,26 +134,66 @@ def grad_log_p(pts: torch.Tensor):
     return grads
 
 # %%
-ksd_kernel = partial(ksd.sqexp_kernel_elem, sigma_sq = 0.53)
-stein_kernel = ksd.build_stein_kernel(grad_log_p, ksd_kernel, is_grad_vectorized=True)
+stein_kernel = ksd.build_stein_kernel(
+    grad_log_p,
+    kernel.sqexp_kernel_elem,
+    bandwidth=2.0,
+    is_grad_vectorized=True
+)
 
 # %%
-from nak_torch.algorithms.kernel import sqexp_kernel_matrix
-pts = trajectories[-1]
-kernel_mat = sqexp_kernel_matrix(pts, kernel_bandwidth**2)
-log_p_evals = log_p(pts)
-log_p_evals -= log_p_evals.max()
-wts = torch.linalg.lstsq(kernel_mat, log_p_evals.exp()).solution
-norm_wts = wts / wts.sum()
-simplex_wts = torch.linalg.lstsq(kernel_mat, torch.ones_like(wts)).solution
-simplex_wts /= simplex_wts.sum()
-stein_mat = stein_kernel(pts)
+from nak_torch.tools.kernel import sqexp_kernel_matrix
+from tqdm import tqdm
+import pandas as pd
+
+idx = []
+df_dict = {k: [] for k in [
+    "kernel_mat",
+    "log_p_evals",
+    "wts",
+    "norm_wts",
+    "simplex_wts",
+    "stein_mat",
+    "KSD uniform wts",
+    "KSD KOQ wts",
+    "KSD norm-KOQ wts",
+    "KSD norm-Proj wts",
+]}
+pts = trajectories_svgd[-1]
+for pts, alg_name in tqdm([
+    (trajectories_msip[-1], "MSIP"),
+    (trajectories_svgd[-1], "SVGD")
+]):
+    kernel_mat = sqexp_kernel_matrix(pts, kernel_bandwidth**2)
+    log_p_evals = log_p(pts)
+    log_p_evals -= log_p_evals.max()
+    wts = torch.linalg.lstsq(kernel_mat, log_p_evals.exp()).solution
+    norm_wts = wts / wts.sum()
+    simplex_wts = torch.linalg.lstsq(kernel_mat, torch.ones_like(wts)).solution
+    simplex_wts /= simplex_wts.sum()
+    stein_mat = stein_kernel(pts)
+
+    ksd_unif = (stein_mat.sum() / (pts.shape[0]**2)).sqrt()
+    ksd_koq = torch.sqrt((stein_mat @ wts) @ wts)
+    ksd_norm_koq = torch.sqrt((stein_mat @ norm_wts) @ norm_wts)
+    ksd_norm_proj = torch.sqrt((stein_mat @ simplex_wts) @ simplex_wts)
+    idx.append(alg_name)
+    df_dict["kernel_mat"].append(kernel_mat)
+    df_dict["log_p_evals"].append(log_p_evals)
+    df_dict["KOQ_wts"].append(wts)
+    df_dict["norm_KOQ_wts"].append(norm_wts)
+    df_dict["norm_simplex_wts"].append(simplex_wts)
+    df_dict["stein_mat"].append(stein_mat)
+    df_dict["KSD uniform wts"].append(ksd_unif)
+    df_dict["KSD KOQ wts"].append(ksd_koq)
+    df_dict["KSD norm-KOQ wts"].append(ksd_norm_koq)
+    df_dict["KSD norm-Proj wts"].append(ksd_norm_proj)
 
 # %%
-ksd_ev_unif = (stein_mat.sum() / (pts.shape[0]**2)).sqrt()
-ksd_ev_wt = torch.sqrt((stein_mat @ wts) @ wts)
-ksd_ev_norm_wt = torch.sqrt((stein_mat @ norm_wts) @ norm_wts)
-ksd_ev_simplex_wt = torch.sqrt((stein_mat @ simplex_wts) @ simplex_wts)
-print("KSD: unif = {}\nweighted = {}\nnormalized weighted = {}\nprojected weighted = {}".format(
-    ksd_ev_unif, ksd_ev_wt, ksd_ev_norm_wt, ksd_ev_simplex_wt
-))
+df_ksd = {k:[x.item() for x in v] for (k,v) in df_dict.items() if k.startswith("KSD")}
+df = pd.DataFrame(df_ksd, index=idx)
+df
+
+# %%
+df_dict["norm_proj_wts"] = df_dict["simplex_wts"]
+# %%
