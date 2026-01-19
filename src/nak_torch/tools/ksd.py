@@ -8,6 +8,10 @@
 import torch
 from torchtyping import TensorType
 from typing import Callable
+__all__ = [
+    "build_stein_kernel",
+    "gaussian_kernel_elem"
+]
 KernelType = Callable[[TensorType[" d"], TensorType[" d"]], TensorType["1"]]
 
 def gaussian_kernel_elem(x: TensorType[" d"], y: TensorType[" d"], sigma_sq: float = 1.0):
