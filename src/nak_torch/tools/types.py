@@ -1,22 +1,20 @@
 
 from torch import Tensor
 from jaxtyping import Float
-from typing import Callable
+from typing import Callable, Optional
 
-KernelType = Callable[[
-    Float[Tensor, " d"],
-    Float[Tensor, " d"],
-    float
-], Float]
+PtType = Float[Tensor, " d"]
+VecPtType = Float[Tensor, "batch d"]
+KernelMatrixType = Float[Tensor, "batch batch"]
 
-MatSelfKernelType = Callable[[
-    Float[Tensor, "batch d"],
-], Float[Tensor, "batch batch"]]
+KernelFunction = Callable[[PtType, PtType, float], Float]
 
-GradLogDensity = Callable[[
-    Float[Tensor, " d"],
-], Float]
+MatSelfKernelFunction = Callable[[
+    VecPtType, float, Optional[VecPtType]
+], KernelMatrixType]
+
+GradLogDensity = Callable[[PtType], Float]
 
 VecGradLogDensity = Callable[[
-    Float[Tensor, "batch d"],
+    VecPtType,
 ], Float[Tensor, " batch"]]

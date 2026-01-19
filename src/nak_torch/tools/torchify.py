@@ -2,7 +2,7 @@ from typing import Callable, Any, Optional
 import torch
 from torch import Tensor
 
-def create_differentiable_density(
+def differentiable_density_factory(
         log_p: Callable[[Any], float], grad_log_p: Callable[[Any], Any],
         tensor_transform: Optional[Callable[[Tensor], Any]] = None,
         tensor_inverse_transform: Optional[Callable[[Any], Tensor]] = None

@@ -1,7 +1,7 @@
 
 import torch
 from typing import Optional, Callable
-from nak_torch.tools.average import recursive_weighted_average_alpha_v
+from nak_torch.tools import recursive_weighted_average_alpha_v
 from nak_torch.tools.kernel import sqexp_kernel_matrix
 from tqdm import tqdm
 

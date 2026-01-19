@@ -4,26 +4,28 @@ import torch
 from nak_torch.functions import aristoff_bangerth as ab, build_aristoff_bangerth
 from nak_torch.algorithms import msip, svgd
 from matplotlib import ticker
+import gc
 import matplotlib.pyplot as plt
-torch.set_default_device("cpu")
+from nak_torch.tools.kernel import sqexp_kernel_matrix
+from tqdm import tqdm
+import pandas as pd
 
-# # %%
-# N, N_obs = 32, 13
-# solve_args = ab.build_forward_solver_args(N, N_obs, torch.float32)
-# thetas = torch.as_tensor(ab.theta_true, device=solve_args[0].device).repeat(11,1)
-
-# # %%
-# hi_res_obs = ab.build_forward_solver_args(N, 128, torch.float32)[0]
-
-# # %%
-# out = ab.forward_solver(thetas, N, *solve_args)
-# obs = (hi_res_obs @ out.T).reshape(128, 128, -1).permute(2, 0, 1)
+if torch.cuda.is_available():
+    torch.set_default_device("cuda")
+else:
+    torch.set_default_device("cpu")
 
 # %%
-log_p = build_aristoff_bangerth(use_compiled=False, dtype=torch.float64)
+log_p = build_aristoff_bangerth(use_compiled=True, dtype=torch.float64)
 log_th = torch.randn(500, 64, requires_grad=True, dtype=torch.float64)
 test_out = log_p(log_th)
 test_eval = torch.autograd.grad(test_out.sum(), log_th)
+
+# %%
+del log_th
+del test_out
+del test_eval
+gc.collect()
 
 # %%
 n_particles, n_steps, dim = 500, 25, 64
@@ -33,7 +35,6 @@ torch.manual_seed(1)
 init_particles = 2 * torch.randn(
     (n_particles, dim),
     dtype=torch.float64,
-    device='cpu'
 )  # Sample from prior
 
 msip_args = {
@@ -49,30 +50,14 @@ msip_args = {
     "bandwidth_factor": 0.5,
     "seed": 0,
     "diag_infl": 1e-10,
-    "device": "cpu",
-    "keep_all": False
+    "keep_all": False,
+    "device": None
 }
 
 # %%
 trajectories_msip, _ = msip(
     log_p,
     **msip_args
-    # n_particles=n_particles,
-    # n_steps=n_steps,  # "epochs" (passes over all particles)
-    # dim=64,
-    # bounds=(-8, 8),   # [a,b]^d
-    # gradient_informed=True,
-    # lr=1e-1,
-    # noise=0.05,          # currently unused
-    # init_particles=init_particles,
-    # kernel_bandwidth=kernel_bandwidth,
-    # bandwidth_factor=0.75,
-    # inner_tol=1e-6,      # equilibrium tolerance for a particle
-    # max_inner_steps=1,  # max inner iterations per particle
-    # seed=0,
-    # diag_infl=1e-10,
-    # device="cpu",
-    # keep_all=False
 )
 
 # %%
@@ -84,7 +69,7 @@ trajectories_svgd, _ = svgd(
 
 # %%
 side_len = min(6, int(math.floor(math.sqrt(n_particles))))
-pts = trajectories_msip[-1][:side_len**2]# - init_particles[:side_len**2]
+pts = trajectories_msip[-1][:side_len**2].detach().cpu()# - init_particles[:side_len**2]
 fig = plt.figure(figsize=(9, 6), layout='constrained')
 gs = fig.add_gridspec(side_len, side_len + 2)
 vabs = max(pts.min().abs(), pts.max().abs())
@@ -124,8 +109,9 @@ ax_true.tick_params(which="minor", length=0)
 plt.show()
 
 # %%
-from nak_torch.tools import ksd, kernel
-from functools import partial
+del pts
+gc.collect()
+from nak_torch.tools import kernel
 def grad_log_p(pts: torch.Tensor):
     pts_grad = pts.clone()
     pts_grad.requires_grad_()
@@ -134,66 +120,63 @@ def grad_log_p(pts: torch.Tensor):
     return grads
 
 # %%
-stein_kernel = ksd.build_stein_kernel(
+stein_kernel_mat = kernel.stein_kernel_mat_factory(
     grad_log_p,
     kernel.sqexp_kernel_elem,
-    bandwidth=2.0,
     is_grad_vectorized=True
 )
 
 # %%
-from nak_torch.tools.kernel import sqexp_kernel_matrix
-from tqdm import tqdm
-import pandas as pd
+stein_kernel_bandwidth = 5.0
 
 idx = []
 df_dict = {k: [] for k in [
     "kernel_mat",
     "log_p_evals",
-    "wts",
-    "norm_wts",
-    "simplex_wts",
+    "KOQ_wts",
+    "norm_KOQ_wts",
+    "norm_simplex_wts",
     "stein_mat",
-    "KSD uniform wts",
-    "KSD KOQ wts",
-    "KSD norm-KOQ wts",
-    "KSD norm-Proj wts",
+    "KSD_unif_wts",
+    "KSD_KOQ_wts",
+    "KSD_norm_KOQ_wts",
+    "KSD_norm_simplex_wts",
 ]}
-pts = trajectories_svgd[-1]
-for pts, alg_name in tqdm([
-    (trajectories_msip[-1], "MSIP"),
-    (trajectories_svgd[-1], "SVGD")
-]):
-    kernel_mat = sqexp_kernel_matrix(pts, kernel_bandwidth**2)
-    log_p_evals = log_p(pts)
-    log_p_evals -= log_p_evals.max()
-    wts = torch.linalg.lstsq(kernel_mat, log_p_evals.exp()).solution
-    norm_wts = wts / wts.sum()
-    simplex_wts = torch.linalg.lstsq(kernel_mat, torch.ones_like(wts)).solution
-    simplex_wts /= simplex_wts.sum()
-    stein_mat = stein_kernel(pts)
 
-    ksd_unif = (stein_mat.sum() / (pts.shape[0]**2)).sqrt()
-    ksd_koq = torch.sqrt((stein_mat @ wts) @ wts)
-    ksd_norm_koq = torch.sqrt((stein_mat @ norm_wts) @ norm_wts)
-    ksd_norm_proj = torch.sqrt((stein_mat @ simplex_wts) @ simplex_wts)
-    idx.append(alg_name)
-    df_dict["kernel_mat"].append(kernel_mat)
-    df_dict["log_p_evals"].append(log_p_evals)
-    df_dict["KOQ_wts"].append(wts)
-    df_dict["norm_KOQ_wts"].append(norm_wts)
-    df_dict["norm_simplex_wts"].append(simplex_wts)
-    df_dict["stein_mat"].append(stein_mat)
-    df_dict["KSD uniform wts"].append(ksd_unif)
-    df_dict["KSD KOQ wts"].append(ksd_koq)
-    df_dict["KSD norm-KOQ wts"].append(ksd_norm_koq)
-    df_dict["KSD norm-Proj wts"].append(ksd_norm_proj)
+with torch.no_grad():
+    pts = trajectories_svgd[-1]
+    for pts, alg_name in tqdm([
+        (trajectories_msip[-1], "MSIP"),
+        (trajectories_svgd[-1], "SVGD")
+    ]):
+        kernel_mat = sqexp_kernel_matrix(pts, kernel_bandwidth**2)
+        log_p_evals = log_p(pts)
+        log_p_evals -= log_p_evals.max()
+        wts = torch.linalg.lstsq(kernel_mat, log_p_evals.exp()).solution
+        norm_wts = wts / wts.sum()
+        simplex_wts = torch.linalg.lstsq(kernel_mat, torch.ones_like(wts)).solution
+        simplex_wts /= simplex_wts.sum()
+        stein_mat = stein_kernel_mat(pts, stein_kernel_bandwidth, None)
+
+        ksd_unif = (stein_mat.sum() / (pts.shape[0]**2)).sqrt()
+        ksd_koq = torch.sqrt((stein_mat @ wts) @ wts)
+        ksd_norm_koq = torch.sqrt((stein_mat @ norm_wts) @ norm_wts)
+        ksd_norm_proj = torch.sqrt((stein_mat @ simplex_wts) @ simplex_wts)
+        idx.append(alg_name)
+        df_dict["kernel_mat"].append(kernel_mat)
+        df_dict["log_p_evals"].append(log_p_evals)
+        df_dict["KOQ_wts"].append(wts)
+        df_dict["norm_KOQ_wts"].append(norm_wts)
+        df_dict["norm_simplex_wts"].append(simplex_wts)
+        df_dict["stein_mat"].append(stein_mat)
+        df_dict["KSD_unif_wts"].append(ksd_unif)
+        df_dict["KSD_KOQ_wts"].append(ksd_koq)
+        df_dict["KSD_norm_KOQ_wts"].append(ksd_norm_koq)
+        df_dict["KSD_norm_simplex_wts"].append(ksd_norm_proj)
 
 # %%
 df_ksd = {k:[x.item() for x in v] for (k,v) in df_dict.items() if k.startswith("KSD")}
 df = pd.DataFrame(df_ksd, index=idx)
 df
 
-# %%
-df_dict["norm_proj_wts"] = df_dict["simplex_wts"]
 # %%

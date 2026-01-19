@@ -14,10 +14,10 @@ from tqdm import tqdm
 from nak_torch.tools.kernel import sqexp_kernel_elem
 from jaxtyping import Float
 from torch import Tensor
-from nak_torch.tools.types import KernelType, VecGradLogDensity
+from nak_torch.tools.types import KernelFunction, VecGradLogDensity
 
 def create_svgd_step(
-    kernel_elem: KernelType,
+    kernel_elem: KernelFunction,
     grad_log_p: VecGradLogDensity,
     bandwidth: float
 ):
@@ -47,10 +47,10 @@ def svgd(
     lr=0.1,
     noise=0.05,
     seed=None,
-    device="cpu",
+    device=None,
     init_particles: Optional[torch.Tensor | np.ndarray] = None,
     kernel_bandwidth: float = 1.0,
-    kernel_elem: Optional[KernelType] = None,
+    kernel_elem: Optional[KernelFunction] = None,
     bounds: Optional[tuple[float, float]] = None,
     keep_all: bool = True,
     is_objective_vectorized: bool = False,
@@ -78,7 +78,7 @@ def svgd(
         trajectories = torch.empty(())
 
     grad_log_p: VecGradLogDensity
-    kernel_fcn: KernelType = sqexp_kernel_elem if kernel_elem is None else kernel_elem
+    kernel_fcn: KernelFunction = sqexp_kernel_elem if kernel_elem is None else kernel_elem
     if grad_log_density is None:
         if is_objective_vectorized:
             def grad_log_p_(pts: Float[Tensor, "batch dim"])-> Float[Tensor, "batch dim"]:

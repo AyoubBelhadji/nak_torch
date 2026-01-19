@@ -20,7 +20,7 @@ def msip(
     lr=0.1,
     noise=0.05,
     seed=None,
-    device="cpu",
+    device=None,
     init_particles: Optional[torch.Tensor | np.ndarray] = None,
     keep_all: bool = True,
     **msip_kwargs
@@ -57,6 +57,6 @@ def msip(
         if keep_all:
             trajectories[idx+1].copy_(particles)
     if keep_all:
-        return trajectories.detach_().cpu(), bounds
+        return trajectories.detach_(), bounds
     else:
         return particles.unsqueeze_(0), bounds
