@@ -2,7 +2,7 @@ import torch
 from typing import Optional, Callable
 from jaxtyping import Float
 from torch import Tensor
-from .types import KernelFunction, MatSelfKernelFunction, PtType, VecPtType, KernelMatrixType, GradLogDensity, VecGradLogDensity
+from .types import KernelFunction, MatSelfKernelFunction, PtType, BatchPtType, KernelMatrixType, GradLogDensity, BatchGradLogDensity
 
 __all__ = [
     "sqexp_kernel_matrix",
@@ -12,9 +12,9 @@ __all__ = [
 ]
 
 def sqexp_kernel_matrix(
-        particles_leaf: VecPtType,
+        particles_leaf: BatchPtType,
         kernel_bandwidth: Float,
-        p_leaf2: Optional[VecPtType] = None
+        p_leaf2: Optional[BatchPtType] = None
 ):
     if p_leaf2 is None:
         p_leaf2 = particles_leaf
@@ -61,7 +61,7 @@ def matricize_kernel_elem(kernel: KernelFunction, use_compiled: bool = True) -> 
 #     return process_kernel_jac
 
 # def stein_kernel_mat_factory(
-#         grad_log_p: GradLogDensity | VecGradLogDensity,
+#         grad_log_p: GradLogDensity | BatchGradLogDensity,
 #         kernel_fcn: KernelFunction,
 #         is_grad_vectorized: bool = False,
 #         use_compiled: bool = True
@@ -72,7 +72,7 @@ def matricize_kernel_elem(kernel: KernelFunction, use_compiled: bool = True) -> 
 #     Use `matricize_kernel_elem` for applying to sets of points
 
 #     :param grad_log_p: Gradient of target log density. If only works on batch of inputs, use `is_grad_vectorized`
-#     :type grad_log_p: GradLogDensity | VecGradLogDensity
+#     :type grad_log_p: GradLogDensity | BatchGradLogDensity
 #     :param kernel_fcn: kernel(x,y,length_scale)->Float
 #     :type kernel_fcn: KernelFunction
 #     :param is_grad_vectorized: Whether `grad_log_p` only works on batches of vectors
@@ -94,7 +94,7 @@ def matricize_kernel_elem(kernel: KernelFunction, use_compiled: bool = True) -> 
 #             torch.vmap(stein_kernel_elem, in_dims = (0, 0, None, None, None), out_dims = 0),
 #             in_dims = (None, None, 0, 0, None), out_dims=1
 #         )
-#         def stein_kernel_mat(p1: VecPtType, length_scale: Float, p2: Optional[VecPtType] = None) -> KernelMatrixType:
+#         def stein_kernel_mat(p1: BatchPtType, length_scale: Float, p2: Optional[BatchPtType] = None) -> KernelMatrixType:
 #             grad_log_p_evals1 = grad_log_p(p1)
 #             if p2 is None:
 #                 p2 = p1
@@ -111,7 +111,7 @@ def matricize_kernel_elem(kernel: KernelFunction, use_compiled: bool = True) -> 
 #         return matricize_kernel_elem(stein_kernel, use_compiled)
 
 def stein_kernel_diffs_factory(kernel_fcn: KernelFunction) -> Callable[
-    [VecPtType, VecPtType, float],
+    [BatchPtType, BatchPtType, float],
     tuple[KernelMatrixType, Float[Tensor, "batch batch d"], KernelMatrixType]
 ]:
 
@@ -134,14 +134,14 @@ def stein_kernel_diffs_factory(kernel_fcn: KernelFunction) -> Callable[
     return kernel_diffs
 
 def stein_kernel_mat_factory(
-        grad_log_p: GradLogDensity | VecGradLogDensity,
+        grad_log_p: GradLogDensity | BatchGradLogDensity,
         kernel_fcn: KernelFunction,
         is_grad_vectorized: bool = False,
         use_compiled: bool = True
 ) -> MatSelfKernelFunction:
     kernel_diffs = stein_kernel_diffs_factory(kernel_fcn)
     grad_log_p_v = grad_log_p if is_grad_vectorized else torch.vmap(grad_log_p)
-    def stein_kernel_mat(pts: VecPtType, length_scale: float, pts2: Optional[VecPtType] = None) -> KernelMatrixType:
+    def stein_kernel_mat(pts: BatchPtType, length_scale: float, pts2: Optional[BatchPtType] = None) -> KernelMatrixType:
         grad_log_p_eval1 = grad_log_p_v(pts)
         if pts2 is None:
             pts2 = pts

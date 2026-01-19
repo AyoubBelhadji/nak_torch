@@ -7,7 +7,7 @@
 # # from nak.util import CentroidT, WeightT, PointT, QuantizationState
 # import torch
 # from jaxtyping import Float
-# from .types import PtType, KernelType, VecGradLogDensity, GradLogDensity, MatSelfKernelType
+# from .types import PtType, KernelType, BatchGradLogDensity, GradLogDensity, MatSelfKernelType
 # from torch import Tensor
 # from typing import Callable
 # __all__ = [
@@ -34,7 +34,7 @@
 #     return process_kernel_jac
 
 # def build_stein_kernel(
-#         grad_log_p: GradLogDensity | VecGradLogDensity,
+#         grad_log_p: GradLogDensity | BatchGradLogDensity,
 #         kernel_fcn: KernelType,
 #         is_grad_vectorized: bool = False
 # ) -> KernelType:

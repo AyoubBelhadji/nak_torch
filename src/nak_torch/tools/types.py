@@ -3,18 +3,21 @@ from torch import Tensor
 from jaxtyping import Float
 from typing import Callable, Optional
 
+BatchType = Float[Tensor, "batch"]
 PtType = Float[Tensor, " d"]
-VecPtType = Float[Tensor, "batch d"]
+BatchPtType = Float[Tensor, "batch d"]
 KernelMatrixType = Float[Tensor, "batch batch"]
 
 KernelFunction = Callable[[PtType, PtType, float], Float]
 
 MatSelfKernelFunction = Callable[[
-    VecPtType, float, Optional[VecPtType]
+    BatchPtType, float, Optional[BatchPtType]
 ], KernelMatrixType]
 
-GradLogDensity = Callable[[PtType], Float]
+LogDensity = Callable[[PtType], Float]
 
-VecGradLogDensity = Callable[[
-    VecPtType,
-], Float[Tensor, " batch"]]
+GradLogDensity = Callable[[PtType], PtType]
+
+BatchLogDensity = Callable[[BatchPtType], BatchType]
+
+BatchGradLogDensity = Callable[[BatchPtType], BatchPtType]
