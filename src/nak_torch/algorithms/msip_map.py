@@ -2,7 +2,7 @@
 import torch
 from typing import Optional, Callable
 from .average import recursive_weighted_average_alpha_v
-from .kernel import gaussian_kernel_matrix
+from .kernel import sqexp_kernel_matrix
 from tqdm import tqdm
 
 def msip_map(
@@ -15,7 +15,7 @@ def msip_map(
         gradient_informed: bool = True,
         diag_infl: float = 0.0,
         output_idx: Optional[int] = None,
-        get_kernel_matrix: Callable[[torch.Tensor, float], torch.Tensor] = gaussian_kernel_matrix,
+        get_kernel_matrix: Callable[[torch.Tensor, float], torch.Tensor] = sqexp_kernel_matrix,
         progress_bar: Optional[tqdm] = None
 ):
     """

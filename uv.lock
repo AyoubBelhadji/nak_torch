@@ -146,6 +146,18 @@ wheels = [
 ]
 
 [[package]]
+name = "jaxtyping"
+version = "0.3.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "wadler-lindig" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/43/30/0e29eab664d33127a7a30aebd7a845a95fbfa1887ede692676769820acea/jaxtyping-0.3.5.tar.gz", hash = "sha256:8150ad5b72b62fa63f573d492a79e9e455f070abe3b260f7dc15270b3eb9bba6", size = 45482, upload-time = "2026-01-05T10:51:34.486Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/73/19/a29de61c7ada0edf4eacfc19355ab8560091b65ea5d2450bcb984e203259/jaxtyping-0.3.5-py3-none-any.whl", hash = "sha256:862c39fa2e526274e82dc96ee8dbe9369dadb651ab1e05d95bd685acb4e2ef02", size = 55824, upload-time = "2026-01-05T10:51:33.523Z" },
+]
+
+[[package]]
 name = "jinja2"
 version = "3.1.6"
 source = { registry = "https://pypi.org/simple" }
@@ -360,19 +372,19 @@ name = "nak-torch"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "jaxtyping" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "torch" },
-    { name = "torchtyping" },
     { name = "tqdm" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "jaxtyping", specifier = ">=0.3.5" },
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "numpy", specifier = ">=2.4.1" },
     { name = "torch", specifier = ">=2.9.1" },
-    { name = "torchtyping", specifier = ">=0.1.5" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]
 
@@ -762,19 +774,6 @@ wheels = [
 ]
 
 [[package]]
-name = "torchtyping"
-version = "0.1.5"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "torch" },
-    { name = "typeguard" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/0c/b2/9099ac2d76ebe538d527ef73844bcfa1296a5c75bd9f2d489e862d47bb42/torchtyping-0.1.5.tar.gz", hash = "sha256:fb51e1792536223e2497b1e106ed0cbe681f7324044599cb718d03be3f2b3851", size = 23067, upload-time = "2024-08-01T02:44:53.579Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/77/33/3915d3a985bf3914aadfc4e24438a8499c0cd91af0c6d251ad5b773bc310/torchtyping-0.1.5-py3-none-any.whl", hash = "sha256:429d76e16b08a2409226320565d557d4ba3d0d6f544db3e5dc4cf690ffa2a3bd", size = 17992, upload-time = "2024-08-01T02:44:51.857Z" },
-]
-
-[[package]]
 name = "tqdm"
 version = "4.67.1"
 source = { registry = "https://pypi.org/simple" }
@@ -799,19 +798,19 @@ wheels = [
 ]
 
 [[package]]
-name = "typeguard"
-version = "2.13.3"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/3a/38/c61bfcf62a7b572b5e9363a802ff92559cb427ee963048e1442e3aef7490/typeguard-2.13.3.tar.gz", hash = "sha256:00edaa8da3a133674796cf5ea87d9f4b4c367d77476e185e80251cc13dfbb8c4", size = 40604, upload-time = "2021-12-10T21:09:39.158Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/9a/bb/d43e5c75054e53efce310e79d63df0ac3f25e34c926be5dffb7d283fb2a8/typeguard-2.13.3-py3-none-any.whl", hash = "sha256:5e3e3be01e887e7eafae5af63d1f36c849aaa94e3a0112097312aabfa16284f1", size = 17605, upload-time = "2021-12-10T21:09:37.844Z" },
-]
-
-[[package]]
 name = "typing-extensions"
 version = "4.15.0"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/72/94/1a15dd82efb362ac84269196e94cf00f187f7ed21c242792a923cdb1c61f/typing_extensions-4.15.0.tar.gz", hash = "sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466", size = 109391, upload-time = "2025-08-25T13:49:26.313Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/18/67/36e9267722cc04a6b9f15c7f3441c2363321a3ea07da7ae0c0707beb2a9c/typing_extensions-4.15.0-py3-none-any.whl", hash = "sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548", size = 44614, upload-time = "2025-08-25T13:49:24.86Z" },
+]
+
+[[package]]
+name = "wadler-lindig"
+version = "0.1.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1e/67/cbae4bf7683a64755c2c1778c418fea96d00e34395bb91743f08bd951571/wadler_lindig-0.1.7.tar.gz", hash = "sha256:81d14d3fe77d441acf3ebd7f4aefac20c74128bf460e84b512806dccf7b2cd55", size = 15842, upload-time = "2025-06-18T07:00:42.843Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8d/96/04e7b441807b26b794da5b11e59ed7f83b2cf8af202bd7eba8ad2fa6046e/wadler_lindig-0.1.7-py3-none-any.whl", hash = "sha256:e3ec83835570fd0a9509f969162aeb9c65618f998b1f42918cfc8d45122fe953", size = 20516, upload-time = "2025-06-18T07:00:41.684Z" },
 ]

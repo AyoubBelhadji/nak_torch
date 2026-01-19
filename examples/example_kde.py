@@ -3,7 +3,7 @@
 
 import numpy as np
 from nak_torch.tools import animate_trajectories_box
-from nak_torch.functions import gaussian_kde
+from nak_torch.functions import sqexp_kde
 from nak_torch.algorithms import msip_greedy
 
 
@@ -13,14 +13,14 @@ if __name__ == "__main__":
     save_gif = True
     now_stamp = datetime.now()
     algorithm_name = "msip_greedy" # Other choices: msip, msip_gs, msip_ni
-    function_name = "gaussian_kde" # Other choices: mixture_of_gaussians, himmelblau
+    function_name = "sqexp_kde" # Other choices: mixture_of_gaussians, himmelblau
 
 
 
     sigma = 0.3
     npz_file = np.load('datasets/two_bananas.npz')
     dataset = 10*npz_file['X'].T - np.mean(10*npz_file['X'].T)
-    objective_function = gaussian_kde(sigma,dataset)
+    objective_function = sqexp_kde(sigma,dataset)
 
 
 

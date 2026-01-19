@@ -6,22 +6,16 @@
 # from nak.target import KernelizedTarget
 # from nak.util import CentroidT, WeightT, PointT, QuantizationState
 import torch
-from torchtyping import TensorType
-from typing import Callable
+from jaxtyping import Float
+from .types import KernelType, VecGradLogDensity, GradLogDensity, MatSelfKernelType
+from torch import Tensor
 __all__ = [
     "build_stein_kernel",
-    "gaussian_kernel_elem"
 ]
-KernelType = Callable[[TensorType[" d"], TensorType[" d"]], TensorType["1"]]
 
-def gaussian_kernel_elem(x: TensorType[" d"], y: TensorType[" d"], sigma_sq: float = 1.0):
-    assert x.shape == y.shape and y.ndim == 1
-    ret = torch.exp( - (x - y).square_().sum() / (2*sigma_sq))
-    return ret
-
-def build_kernel_diffs(kernel_fcn: KernelType):
+def build_kernel_diffs(kernel_fcn: KernelType, bandwidth: float):
     def process_kernel_fcn(x,y):
-        ret = kernel_fcn(x,y)
+        ret = kernel_fcn(x,y,bandwidth)
         return ret, ret
 
     kernel_grad = torch.func.grad(process_kernel_fcn, has_aux=True, argnums=0)
@@ -43,13 +37,14 @@ def build_kernel_diffs(kernel_fcn: KernelType):
     return kernel_diffs
 
 def build_stein_kernel(
-        grad_log_p: Callable[[TensorType[" d"]], TensorType["1"]],
+        grad_log_p: GradLogDensity | VecGradLogDensity,
         kernel_fcn: KernelType,
+        bandwidth: float,
         is_grad_vectorized: bool = False
-) -> Callable[[TensorType[" batch", " d"]], TensorType[" batch", " batch"]]:
-    kernel_diffs = build_kernel_diffs(kernel_fcn)
-    grad_log_p_v: Callable[[TensorType]] = grad_log_p if is_grad_vectorized else torch.vmap(grad_log_p)
-    def stein_kernel(pts: TensorType[" batch", " dim"]):
+) -> MatSelfKernelType:
+    kernel_diffs = build_kernel_diffs(kernel_fcn, bandwidth)
+    grad_log_p_v = grad_log_p if is_grad_vectorized else torch.vmap(grad_log_p)
+    def stein_kernel(pts: Float[Tensor, "batch dim"]) -> Float[Tensor, "batch batch"]:
         grad_log_p_eval = grad_log_p_v(pts)
         trace_kernel, grad1_kernel, eval_kernel = kernel_diffs(pts, pts)
         grad_term_1 = torch.einsum("ijd,jd->ij", grad1_kernel, grad_log_p_eval)

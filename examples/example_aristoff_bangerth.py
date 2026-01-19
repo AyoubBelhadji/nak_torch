@@ -104,15 +104,15 @@ def grad_log_p(pts: torch.Tensor):
     fitness = log_p(pts_grad)   # shape (N,)
     grads, = torch.autograd.grad(fitness.sum(), pts_grad)
     return grads
-# grad_log_p = torch.func.grad(lambda x: log_p(x).sum())
-ksd_kernel = partial(ksd.gaussian_kernel_elem, sigma_sq = 0.1)
 
+# %%
+ksd_kernel = partial(ksd.sqexp_kernel_elem, sigma_sq = 0.53)
 stein_kernel = ksd.build_stein_kernel(grad_log_p, ksd_kernel, is_grad_vectorized=True)
 
 # %%
-from nak_torch.algorithms.kernel import gaussian_kernel_matrix
+from nak_torch.algorithms.kernel import sqexp_kernel_matrix
 pts = trajectories[-1]
-kernel_mat = gaussian_kernel_matrix(pts, kernel_bandwidth)
+kernel_mat = sqexp_kernel_matrix(pts, kernel_bandwidth**2)
 log_p_evals = log_p(pts)
 log_p_evals -= log_p_evals.max()
 wts = torch.linalg.lstsq(kernel_mat, log_p_evals.exp()).solution
