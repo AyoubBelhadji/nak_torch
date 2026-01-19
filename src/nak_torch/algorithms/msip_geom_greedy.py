@@ -12,11 +12,11 @@ import copy
 
 
 def recursive_weighted_average_alpha_v(y, alpha, v=None, log_v=None, eps=1e-18):
-    """
-    Compute a stable weighted average \sum v_i a_i y_i / \sum v_i a_i using log-weights 
+    r"""
+    Compute a stable weighted average \sum v_i a_i y_i / \sum v_i a_i using log-weights
     y: (N, d)   the containing the vectors y_i
     alpha: (N,) the array of arbitrary weights
-    v: (N,) or log_v: (N,) the array of postive weights 
+    v: (N,) or log_v: (N,) the array of postive weights
     """
     y = torch.as_tensor(y)
     alpha = torch.as_tensor(alpha)
@@ -24,7 +24,7 @@ def recursive_weighted_average_alpha_v(y, alpha, v=None, log_v=None, eps=1e-18):
     dtype = y.dtype
     N, d = y.shape
 
-    # Check the 'mode' of weighting: 
+    # Check the 'mode' of weighting:
     # 1) v is given
     # 2) log_v is given
     # 3) neither v nor log_v is given
@@ -52,7 +52,7 @@ def recursive_weighted_average_alpha_v(y, alpha, v=None, log_v=None, eps=1e-18):
     logw = log_abs_alpha + log_v
     sign = alpha.sign()
 
-    # Look for max log |w_i| 
+    # Look for max log |w_i|
     z_max = logw.max()
 
     # Calculate stable weights
@@ -68,7 +68,7 @@ def recursive_weighted_average_alpha_v(y, alpha, v=None, log_v=None, eps=1e-18):
     # Calculate the numerator
     numerator = (weighted_signs.unsqueeze(1) * y).sum(dim=0)
 
-    # Calculate the ratio 
+    # Calculate the ratio
     weighted_average = numerator / denominator
 
     return weighted_average
@@ -236,7 +236,7 @@ def update_one_particle(
 
 
 def msip_geom_greedy(
-    objective_function, 
+    objective_function,
     n_particles=50,
     n_steps=10,          # now interpreted as "epochs" (passes over all particles)
     dim=2,
