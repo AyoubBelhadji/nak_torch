@@ -3,7 +3,7 @@
 
 import numpy as np
 from nak_torch.tools import animate_trajectories_box
-from nak_torch.functions import sqexp_kde
+from nak_torch.functions import gaussian_kde
 from nak_torch.algorithms import msip_greedy
 
 
@@ -20,7 +20,7 @@ if __name__ == "__main__":
     sigma = 0.3
     npz_file = np.load('datasets/two_bananas.npz')
     dataset = 10*npz_file['X'].T - np.mean(10*npz_file['X'].T)
-    objective_function = sqexp_kde(sigma,dataset)
+    objective_function = gaussian_kde(sigma,dataset)
 
 
 
