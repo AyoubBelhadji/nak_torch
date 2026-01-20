@@ -69,7 +69,7 @@ def build_eks_step(eks_model: EKSModel, dt: float):
         obs_diff = forecast_observations - true_obs
         forecast_diff = forecast_observations - forecast_obs_mean
         prior_ens_diff = particles - particle_mean
-        cov_prior = (prior_ens_diff.T @ prior_ens_diff) / N_batch
+        cov_forecast = (prior_ens_diff.T @ prior_ens_diff) / N_batch
 
         if isinstance(likelihood_precision, float):
             likely_term = torch.einsum(
@@ -83,16 +83,17 @@ def build_eks_step(eks_model: EKSModel, dt: float):
                 forecast_diff, likelihood_precision, obs_diff, particles
             )
             likely_term.mul_(dt / N_batch)
-
+        # INPLACE
+        cov_forecast.mul_(dt)
+        sqrt_prior_cov = sym_sqrtm(cov_forecast)
+        sqrt_prior_cov.mul_(sqrt_2)
         if isinstance(prior_precision, float):
-            prior_term_premul = cov_prior.mul_(dt * prior_precision)
+            prior_term_premul = cov_forecast.mul_(prior_precision)
         elif isinstance(prior_precision, Tensor):
-            prior_term_premul = torch.matmul(cov_prior, prior_precision).mul_(dt)
+            prior_term_premul = torch.matmul(cov_forecast, prior_precision)
         else:
             raise ValueError()
 
-        sqrt_prior_cov = sym_sqrtm(cov_prior)
-        sqrt_prior_cov.mul_(sqrt_2)
         prior_term_premul.add_(torch.eye(dim))
         new_particles = torch.linalg.solve(prior_term_premul, particles - likely_term, left=False)
         return new_particles, sqrt_prior_cov

@@ -66,15 +66,15 @@ samps = torch.randn(10000, 2) @ cov_post_sqrt + mean_post
 
 # %%
 fig,ax=plt.subplots()
-pts = trajectories[-1] @ torch.sqrt(torch.linalg.inv(eks_model.prior_precision))
+pts = trajectories[-1]
 Ngrid = 100
 xgrid = torch.linspace(min(samps[:,0].min(), -5), max(samps[:,0].max(), 5), Ngrid)
 ygrid = torch.linspace(min(samps[:,1].min(), -5), max(samps[:,1].max(), 5), Ngrid)
 X,Y = torch.meshgrid(xgrid, ygrid, indexing="ij")
 grid_pts = torch.stack((X.flatten(), Y.flatten()), 1)
-# ax.contour(X, Y, post_log_dens(grid_pts).reshape(Ngrid, Ngrid), levels=10)
-# ax.scatter(samps[:,0], samps[:,1], alpha=0.05)
-ax.scatter(pts[:,0], pts[:,1], alpha=0.15)
+ax.contour(X, Y, post_log_dens(grid_pts).reshape(Ngrid, Ngrid), levels=10)
+ax.scatter(samps[:,0], samps[:,1], alpha=0.05)
+ax.scatter(pts[:,0], pts[:,1], alpha=0.25)
 ax.set_aspect(1.0)
 plt.show()
 
