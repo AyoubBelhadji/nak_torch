@@ -94,7 +94,8 @@ def msip_ni(objective_function,
     if seed is not None:
         torch.manual_seed(seed)
 
-    particles = (bounds[1] - bounds[0]) * torch.rand((n_particles, dim), device=device) + bounds[0]
+    particles = torch.empty((n_particles, dim), device=device).uniform_(*bounds)
+
     trajectories = [particles.detach().cpu().numpy().copy()]
 
     for t in range(n_steps):

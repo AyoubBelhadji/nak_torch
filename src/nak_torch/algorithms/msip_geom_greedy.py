@@ -156,7 +156,8 @@ def msip_geom_greedy(
         torch.manual_seed(seed)
 
     # Init particles
-    particles = (bounds[1] - bounds[0]) * torch.rand((n_particles, dim), device=device) + 1.5 * bounds[0]
+    particles = torch.empty((n_particles, dim), device=device).uniform_(*bounds)
+
     trajectories = [particles.detach().cpu().numpy().copy()]
 
     # Outer loop: epochs

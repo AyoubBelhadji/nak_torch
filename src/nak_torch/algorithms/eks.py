@@ -128,7 +128,7 @@ def eks(
         if bounds is None:
             particles = torch.randn((n_particles, dim), device=device)
         else:
-            particles = (bounds[1] - bounds[0]) * torch.rand((n_particles, dim), device=device) + 1.5*bounds[0]
+            particles = torch.empty((n_particles, dim), device=device).uniform_(*bounds, generator=rng)
     else:
         particles = torch.as_tensor(init_particles, device=device)
     if keep_all:

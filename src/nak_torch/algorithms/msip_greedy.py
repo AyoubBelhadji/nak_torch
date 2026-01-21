@@ -103,8 +103,7 @@ def msip_greedy(
             particles = torch.randn((n_particles, dim), device=device)
         else:
             # Init particles
-            particles = (bounds[1] - bounds[0]) * \
-                torch.rand((n_particles, dim), device=device) + bounds[0]
+            particles = torch.empty((n_particles, dim)).uniform_(bounds[0], bounds[1])
     elif isinstance(init_particles, np.ndarray):
         particles = torch.tensor(init_particles, device=device)
     else:

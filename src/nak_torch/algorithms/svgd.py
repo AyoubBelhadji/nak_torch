@@ -16,18 +16,20 @@ from jaxtyping import Float
 from torch import Tensor
 from nak_torch.tools.types import KernelFunction, BatchGradLogDensity
 
+
 def create_svgd_step(
     kernel_elem: KernelFunction,
     grad_log_p: BatchGradLogDensity,
     bandwidth: float
 ):
     kernel_grad_val = torch.func.grad_and_value(
-        lambda x,y: kernel_elem(x, y, bandwidth), argnums=1
+        lambda x, y: kernel_elem(x, y, bandwidth), argnums=1
     )
     kernel_grad_val_vec = torch.vmap(
         torch.vmap(kernel_grad_val, in_dims=(None, 0)),
         in_dims=(0, None)
     )
+
     def svgd_step_dir(points: Float[Tensor, "batch d"]):
         # kg[i,j,k] = grad_2(k) k(x_i, x_j), k[j,i] = k(x_i, x_j)
         k_grad, k_eval = kernel_grad_val_vec(points, points)
@@ -39,15 +41,15 @@ def create_svgd_step(
 
     return torch.compile(svgd_step_dir)
 
+
 def svgd(
     log_density,
-    n_particles=50,
-    n_steps=100,
-    dim=2,
-    lr=0.1,
-    noise=0.05,
-    seed=None,
-    device=None,
+    n_particles: int,
+    n_steps: int,
+    dim: int,
+    lr: float,
+    seed: Optional[int] = None,
+    device: Optional[torch.device] = None,
     init_particles: Optional[torch.Tensor | np.ndarray] = None,
     kernel_bandwidth: float = 1.0,
     kernel_elem: Optional[KernelFunction] = None,
@@ -68,11 +70,12 @@ def svgd(
         if bounds is None:
             particles = torch.randn((n_particles, dim), device=device)
         else:
-            particles = (bounds[1] - bounds[0]) * torch.rand((n_particles, dim), device=device) + 1.5*bounds[0]
+            particles = torch.empty((n_particles, dim), device=device).uniform_(bounds[0], bounds[1])
     else:
         particles = torch.as_tensor(init_particles, device=device)
     if keep_all:
-        trajectories = torch.empty((n_steps, *particles.shape), dtype=particles.dtype)
+        trajectories = torch.empty(
+            (n_steps, *particles.shape), dtype=particles.dtype)
         trajectories[0].copy_(particles)
     else:
         trajectories = torch.empty(())
@@ -81,7 +84,7 @@ def svgd(
     kernel_fcn: KernelFunction = sqexp_kernel_elem if kernel_elem is None else kernel_elem
     if grad_log_density is None:
         if is_objective_vectorized:
-            def grad_log_p_(pts: Float[Tensor, "batch dim"])-> Float[Tensor, "batch dim"]:
+            def grad_log_p_(pts: Float[Tensor, "batch dim"]) -> Float[Tensor, "batch dim"]:
                 pts_cl = pts.clone().requires_grad_()
                 return torch.autograd.grad(log_density(pts_cl).sum(), pts_cl)[0]
             grad_log_p = grad_log_p_
