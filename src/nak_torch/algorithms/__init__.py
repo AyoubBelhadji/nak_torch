@@ -7,7 +7,7 @@
 # Ayoub Belhadji
 # 05/12/2025
 
-from . import eks
+from .eks import eks
 from .msip import msip
 from .msip_ni import msip_ni
 from .msip_greedy import msip_greedy

@@ -2,53 +2,14 @@ import torch
 from typing import Optional, Callable
 from jaxtyping import Float
 from torch import Tensor
-from nak_torch.tools.types import BatchPtType, PtType
+from nak_torch.tools.types import BatchPtType, GaussianModel
 import warnings
 from tqdm import tqdm
 import numpy as np
-from dataclasses import dataclass
-
-ForwardModel = Callable[
-    [Float[Tensor, " dim"]], Float[Tensor, " obs"]
-]
-
-BatchForwardModel = Callable[
-    [Float[Tensor, "batch dim"]], Float[Tensor, "batch obs"]
-]
-
-def sym_sqrtm(A: Float[Tensor, "n n"]):
-    e,v = torch.linalg.eigh(A)
-    return torch.einsum("ij,j,kj->ik", v, e.sqrt_(), v)
-
-@dataclass
-class EKSModel:
-    forward_model: BatchForwardModel
-    likelihood_precision: float | Float[Tensor, "obs obs"]
-    prior_precision: float | Float[Tensor, "dim dim"]
-    true_obs: Float | Float[Tensor, " obs"]
-    prior_mean: float | Float[Tensor, " dim"]
-    def __init__(
-            self,
-            forward_model: ForwardModel | BatchForwardModel,
-            likelihood_precision: float | Float[Tensor, "obs obs"] = 1.0,
-            prior_precision: float | Float[Tensor, "dim dim"] = 1.0,
-            true_obs: Float | Float[Tensor, " obs"] = torch.zeros(()),
-            prior_mean: float | Float[Tensor, " dim"] = 0.0,
-            is_vectorized: bool = False
-    ):
-        if is_vectorized:
-            self.forward_model = forward_model
-        else:
-            self.forward_model = torch.vmap(forward_model)
-        if prior_mean != 0.0:
-            raise ValueError("Only support zero prior mean for now")
-        self.likelihood_precision = likelihood_precision
-        self.prior_precision = prior_precision
-        self.true_obs = true_obs
-        self.prior_mean = prior_mean
+from nak_torch.tools.util import sym_sqrtm
 
 
-def build_eks_step(eks_model: EKSModel, dt: float):
+def build_eks_step(eks_model: GaussianModel, dt: float):
     likelihood_precision = eks_model.likelihood_precision
     prior_precision = eks_model.prior_precision
     true_obs = eks_model.true_obs
@@ -101,7 +62,7 @@ def build_eks_step(eks_model: EKSModel, dt: float):
     return torch.compile(eks_step)
 
 def eks(
-    eks_model: EKSModel,
+    eks_model: GaussianModel,
     n_particles: int,
     n_steps: int,
     dim: int,
@@ -130,7 +91,7 @@ def eks(
         else:
             particles = torch.empty((n_particles, dim), device=device).uniform_(*bounds, generator=rng)
     else:
-        particles = torch.as_tensor(init_particles, device=device)
+        particles = torch.as_tensor(init_particles, device=device).clone()
     if keep_all:
         trajectories = torch.empty((n_steps, *particles.shape), dtype=particles.dtype)
         trajectories[0].copy_(particles)

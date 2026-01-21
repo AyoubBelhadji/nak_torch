@@ -1,25 +1,12 @@
 import torch
-from typing import Optional, Callable
+from typing import Optional
 from jaxtyping import Float
 from torch import Tensor
 from nak_torch.tools.types import BatchGradLogDensity, BatchPtType
 import warnings
 from tqdm import tqdm
 import numpy as np
-
-ForwardModel = Callable[
-    [Float[Tensor, " dim"]], Float[Tensor, " obs"]
-]
-
-BatchForwardModel = Callable[
-    [Float[Tensor, "batch dim"]], Float[Tensor, "batch obs"]
-]
-
-
-def sym_sqrtm(A: Float[Tensor, "n n"]):
-    e, v = torch.linalg.eigh(A)
-    return torch.einsum("ij,j,kj->ik", v, e.sqrt_(), v)
-
+from nak_torch.tools.util import sym_sqrtm
 
 @torch.compile
 def grad_aldi_step(
@@ -89,7 +76,7 @@ def grad_aldi(
         else:
             particles = torch.empty((n_particles, dim), device=device).uniform_(*bounds)
     else:
-        particles = torch.as_tensor(init_particles, device=device)
+        particles = torch.as_tensor(init_particles, device=device).clone()
 
     if keep_all:
         trajectories = torch.empty(

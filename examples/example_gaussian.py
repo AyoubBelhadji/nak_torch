@@ -1,16 +1,10 @@
 # %%
-import math
 import torch
 from torch import Tensor
-from nak_torch.functions import aristoff_bangerth as ab, build_aristoff_bangerth
 from nak_torch.algorithms import grad_aldi, eks
-from matplotlib import ticker
-import gc
+import nak_torch
 import matplotlib.pyplot as plt
 from jaxtyping import Float
-from nak_torch.tools.kernel import sqexp_kernel_matrix
-from tqdm import tqdm
-import pandas as pd
 
 if torch.cuda.is_available():
     torch.set_default_device("cuda")
@@ -37,7 +31,7 @@ obs_op = torch.randn(2, 5)
 forward_model = torch.compile(lambda particles: particles @ obs_op)
 true_obs = torch.tensor([1.0, 2.0, 3.0, 2.0, 1.0])
 
-eks_model = eks.EKSModel(
+eks_model = nak_torch.GaussianModel(
     forward_model, likelihood_precision = 0.53,
     prior_precision= 0.12, true_obs=true_obs,
     is_vectorized=True
@@ -47,7 +41,7 @@ eks_model = eks.EKSModel(
 n_steps, n_particles = 10000, 500
 lr = 0.1
 init_particles = torch.randn((n_particles, 2))
-trajectories_eks,_ = eks.eks(
+trajectories_eks,_ = eks(
     eks_model, n_particles=n_particles,
     n_steps=n_steps, dim=2, lr = lr,
     init_particles=init_particles, keep_all=False,
@@ -86,8 +80,8 @@ ygrid = torch.linspace(min(samps[:,1].min(), -5), max(samps[:,1].max(), 5), Ngri
 X,Y = torch.meshgrid(xgrid, ygrid, indexing="ij")
 grid_pts = torch.stack((X.flatten(), Y.flatten()), 1)
 ax.contour(X, Y, post_log_dens(grid_pts).reshape(Ngrid, Ngrid), levels=10)
-ax.scatter(samps[:,0], samps[:,1], alpha=0.05, label="Truth")
-ax.scatter(pts_galdi[:,0], pts_galdi[:,1], alpha=0.1, label="Grad-ALDI")
+ax.scatter(samps[:,0], samps[:,1], alpha=0.025, label="Truth")
+ax.scatter(pts_galdi[:,0], pts_galdi[:,1], alpha=0.2, label="Grad-ALDI")
 ax.scatter(pts_eks[:,0], pts_eks[:,1], alpha=0.1, label="EKS")
 ax.set_aspect(1.0)
 ax.legend()

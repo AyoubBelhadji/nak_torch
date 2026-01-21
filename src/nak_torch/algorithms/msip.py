@@ -34,7 +34,7 @@ def msip(
         else:
             particles = torch.empty((n_particles, dim), device=device).uniform_(*bounds)
     else:
-        particles = torch.as_tensor(init_particles, device=device)
+        particles = torch.as_tensor(init_particles, device=device).clone()
     if keep_all:
         trajectories = torch.empty((n_steps, *particles.shape), dtype=particles.dtype)
         trajectories[0].copy_(particles)
