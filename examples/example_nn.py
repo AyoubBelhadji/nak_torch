@@ -55,11 +55,12 @@ if __name__ == "__main__":
     objective_function = loss_nn_dataset('two_bananas', beta = 2.0, lambda2=0.01, device="cpu")
 
     M = 5
-    trajectories, bounds = msip_greedy(objective_function,
+    bounds = (-5., 5.)
+    trajectories = msip_greedy(objective_function,
              n_particles=M,
              n_steps=300,          # now interpreted as "epochs" (passes over all particles)
              dim=60,
-             bounds=(-2.5, 2.5),
+             bounds=bounds,
              projection = True,
              lr=0.5,
              noise=0.05,          # currently unused, kept for compatibility
@@ -82,7 +83,6 @@ if __name__ == "__main__":
 
 
     if save_gif:
-        bounds = [-5,5]
         fpath = f"results/gif/{algorithm_name}_{function_name}_particles_{now_stamp}.gif"
         animate_trajectories_box(
             objective_function,

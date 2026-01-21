@@ -25,7 +25,7 @@ if __name__ == "__main__":
 
 
 
-    trajectories, _ = msip_greedy(
+    trajectories = msip_greedy(
         objective_function,
         n_particles=25,
         n_steps=40, # "epochs" (passes over all particles)

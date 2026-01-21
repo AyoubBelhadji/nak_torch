@@ -55,15 +55,15 @@ msip_args = {
 }
 
 # %%
-trajectories_msip, _ = msip(
+trajectories_msip = msip(
     log_p,
     **msip_args
 )
 
 # %%
-trajectories_svgd, _ = svgd(
+trajectories_svgd = svgd(
     log_p,
-    is_objective_vectorized=True,
+    is_density_vectorized=True,
     **msip_args
 )
 

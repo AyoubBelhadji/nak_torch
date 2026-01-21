@@ -42,7 +42,7 @@ model = nak_torch.GaussianModel(
 n_steps, n_particles = 1000, 500
 lr = 0.1
 init_particles = torch.randn((n_particles, 2))
-trajectories_eks,_ = eks(
+trajectories_eks = eks(
     model, n_particles=n_particles,
     n_steps=n_steps, dim=2, lr = lr,
     init_particles=init_particles, keep_all=False,
@@ -55,7 +55,7 @@ def post_log_dens(pts):
     return -0.5 * (ll_term + prior_term)
 
 # %%
-trajectories_galdi,_ = grad_aldi(
+trajectories_galdi = grad_aldi(
     post_log_dens, n_particles, n_steps, dim=2,
     lr=lr, init_particles=init_particles,
     is_density_vectorized=True,
@@ -63,7 +63,7 @@ trajectories_galdi,_ = grad_aldi(
 )
 
 # %%
-trajectories_gfaldi,_ = gradfree_aldi(
+trajectories_gfaldi = gradfree_aldi(
     model, n_particles, n_steps, dim=2,
     lr=lr, init_particles=init_particles,
     keep_all=True

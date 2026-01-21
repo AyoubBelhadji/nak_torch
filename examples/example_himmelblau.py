@@ -13,7 +13,7 @@ if __name__ == "__main__":
     function_name = "himmelblau"
     objective_function = himmelblau(50.0)
 
-    trajectories, bounds = msip_greedy(objective_function,
+    trajectories = msip_greedy(objective_function,
              n_particles=10,
              n_steps=50,          # now interpreted as "epochs" (passes over all particles)
              dim=2,
@@ -25,7 +25,8 @@ if __name__ == "__main__":
              inner_tol=1e-4,      # equilibrium tolerance for a particle
              max_inner_steps=1000,  # max inner iterations per particle
              seed=None,
-             device="cpu")
+             device="cpu"
+    )
 
     if save_gif:
         bounds = [-15,15]
