@@ -1,7 +1,7 @@
 # %%
 import torch
 from torch import Tensor
-from nak_torch.algorithms import grad_aldi, eks
+from nak_torch.algorithms import grad_aldi, eks, gradfree_aldi
 import nak_torch
 import matplotlib.pyplot as plt
 from jaxtyping import Float
@@ -27,30 +27,31 @@ def make_gaussian_post(
     return mean_post, cov_post
 
 # %%
+torch.manual_seed(1023921)
 obs_op = torch.randn(2, 5)
 forward_model = torch.compile(lambda particles: particles @ obs_op)
 true_obs = torch.tensor([1.0, 2.0, 3.0, 2.0, 1.0])
 
-eks_model = nak_torch.GaussianModel(
+model = nak_torch.GaussianModel(
     forward_model, likelihood_precision = 0.53,
     prior_precision= 0.12, true_obs=true_obs,
     is_vectorized=True
 )
 
 # %%
-n_steps, n_particles = 10000, 500
+n_steps, n_particles = 1000, 500
 lr = 0.1
 init_particles = torch.randn((n_particles, 2))
 trajectories_eks,_ = eks(
-    eks_model, n_particles=n_particles,
+    model, n_particles=n_particles,
     n_steps=n_steps, dim=2, lr = lr,
     init_particles=init_particles, keep_all=False,
 )
 
 # %%
 def post_log_dens(pts):
-    ll_term = eks_model.likelihood_precision * torch.linalg.norm(pts @ obs_op - eks_model.true_obs, dim=1)**2
-    prior_term = eks_model.prior_precision * torch.linalg.norm(pts, dim=1)**2
+    ll_term = model.likelihood_precision * torch.linalg.norm(pts @ obs_op - model.true_obs, dim=1)**2
+    prior_term = model.prior_precision * torch.linalg.norm(pts, dim=1)**2
     return -0.5 * (ll_term + prior_term)
 
 # %%
@@ -62,10 +63,18 @@ trajectories_galdi,_ = grad_aldi(
 )
 
 # %%
+trajectories_gfaldi,_ = gradfree_aldi(
+    model, n_particles, n_steps, dim=2,
+    lr=lr, init_particles=init_particles,
+    keep_all=True
+)
+
+# %%
 pts_eks = trajectories_eks[-1]
 pts_galdi = trajectories_galdi[-1]
-mean_pr, cov_pr = torch.zeros(2), torch.eye(2) / eks_model.prior_precision
-mean_li, cov_li = eks_model.true_obs, torch.eye(len(eks_model.true_obs)) / eks_model.likelihood_precision
+pts_gfaldi = trajectories_gfaldi[-1]
+mean_pr, cov_pr = torch.zeros(2), torch.eye(2) / model.prior_precision
+mean_li, cov_li = model.true_obs, torch.eye(len(model.true_obs)) / model.likelihood_precision
 
 mean_post, cov_post = make_gaussian_post(obs_op, mean_pr, cov_pr, mean_li, cov_li)
 vals, vecs  = torch.linalg.eigh(cov_post)
@@ -82,14 +91,15 @@ grid_pts = torch.stack((X.flatten(), Y.flatten()), 1)
 ax.contour(X, Y, post_log_dens(grid_pts).reshape(Ngrid, Ngrid), levels=10)
 ax.scatter(samps[:,0], samps[:,1], alpha=0.025, label="Truth")
 ax.scatter(pts_galdi[:,0], pts_galdi[:,1], alpha=0.2, label="Grad-ALDI")
+ax.scatter(pts_gfaldi[:,0], pts_gfaldi[:,1], alpha=0.2, label="GradFree-ALDI")
 ax.scatter(pts_eks[:,0], pts_eks[:,1], alpha=0.1, label="EKS")
 ax.set_aspect(1.0)
 ax.legend()
 plt.show()
 
 # %%
-print("Covariances---\nTruth:\n{}\nGrad-ALDI:\n{},\nEKS:\n{}".format(
-    cov_post, pts_galdi.T.cov(), pts_eks.T.cov()
+print("Covariances---\nTruth:\n{},\nEKS:\n{}\nGrad-ALDI:\n{}\nGradFree-ALDI:\n{}".format(
+    cov_post, pts_eks.T.cov(), pts_galdi.T.cov(), pts_gfaldi.T.cov()
 ))
 
 # %%

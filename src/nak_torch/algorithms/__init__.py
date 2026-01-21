@@ -14,6 +14,7 @@ from .msip_greedy import msip_greedy
 from .msip_geom_greedy import msip_geom_greedy
 from .svgd import svgd
 from .grad_aldi import grad_aldi
+from .gradfree_aldi import gradfree_aldi
 
 
 __all__ = [
@@ -23,5 +24,6 @@ __all__ = [
     "msip_geom_greedy",
     "svgd",
     "grad_aldi",
+    "gradfree_aldi",
     "eks"
 ]
