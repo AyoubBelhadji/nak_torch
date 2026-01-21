@@ -6,7 +6,7 @@ from nak_torch.tools.types import BatchGradLogDensity, BatchPtType
 import warnings
 from tqdm import tqdm
 import numpy as np
-from nak_torch.tools.util import sym_sqrtm
+from nak_torch.tools.util import batched_grad_log_density_factory, initialize_particles, sym_sqrtm
 
 @torch.compile
 def grad_aldi_step(
@@ -58,29 +58,13 @@ def grad_aldi(
     if seed is not None:
         rng.manual_seed(seed)
 
-    if grad_log_density is None:
-        if is_density_vectorized:
-            def grad_log_p_(pts: Float[Tensor, "batch dim"]) -> Float[Tensor, "batch dim"]:
-                pts_cl = pts.clone().requires_grad_()
-                return torch.autograd.grad(log_density(pts_cl).sum(), pts_cl)[0]
-            grad_log_p = grad_log_p_
-        else:
-            grad_log_p = torch.vmap(torch.func.grad(log_density))
-    else:
-        grad_log_p = grad_log_density
-
-    particles: Tensor
-    if init_particles is None:
-        if bounds is None:
-            particles = torch.normal(0.0, 1.0, (n_particles, dim), generator=rng, device=device)
-        else:
-            particles = torch.empty((n_particles, dim), device=device).uniform_(*bounds)
-    else:
-        particles = torch.as_tensor(init_particles, device=device).clone()
+    grad_log_p = batched_grad_log_density_factory(log_density, is_density_vectorized, grad_log_density)
+    particles = initialize_particles(n_particles, dim, init_particles, device, bounds, rng)
 
     if keep_all:
         trajectories = torch.empty(
-            (n_steps, *particles.shape), dtype=particles.dtype)
+            (n_steps, *particles.shape), device=device, dtype=particles.dtype
+        )
         trajectories[0].copy_(particles)
     else:
         trajectories = torch.empty(())
@@ -99,7 +83,4 @@ def grad_aldi(
         if keep_all:
             trajectories[idx].copy_(particles)
 
-    if keep_all:
-        return trajectories, bounds
-    else:
-        return particles.unsqueeze_(0), bounds
+    return trajectories.detach_() if keep_all else particles.unsqueeze_(0)

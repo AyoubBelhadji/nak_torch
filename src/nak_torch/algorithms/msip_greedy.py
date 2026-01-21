@@ -10,6 +10,8 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from typing import Optional
+
+from nak_torch.tools.util import initialize_particles
 from .msip_map import msip_map
 
 
@@ -73,41 +75,24 @@ def update_one_particle(
 
 
 def msip_greedy(
-    objective_function,
-    n_particles: int = 50,
+    log_density,
+    n_particles: int,
     # now interpreted as "epochs" (passes over all particles)
-    n_steps: int = 10,
-    dim: int = 2,
-    lr: float = 0.1,
+    n_steps: int,
+    dim: int,
+    lr: float,
     noise: float = 0.05,          # currently unused, kept for compatibility
-    inner_tol: float = 1e-4,      # equilibrium tolerance for a particle
     seed: Optional[int] = None,
-    max_inner_steps: int = 50,  # max inner iterations per particle
-    device: str | torch.device = "cpu",
+    device: Optional[torch.device] = None,
     init_particles: Optional[torch.Tensor | np.ndarray] = None,
+    bounds: Optional[tuple[float, float]] = None,
     **msip_kwargs
-    # gradient_informed: bool = True,
-    # projection: bool = True,
-    # bounds: tuple[float, float] = (-5, 5),
-    # kernel_bandwidth: float = 1.0,
-    # bandwidth_factor: float = 0.5,
-    # diag_infl: float = 0.0
 ):
 
     if seed is not None:
         torch.manual_seed(seed)
 
-    bounds = msip_kwargs.get('bounds', None)
-    if init_particles is None:
-        if bounds is None:
-            particles = torch.randn((n_particles, dim), device=device)
-        else:
-            # Init particles
-            particles = torch.empty((n_particles, dim)).uniform_(bounds[0], bounds[1])
-    elif isinstance(init_particles, np.ndarray):
-        particles = torch.tensor(init_particles, device=device)
-    else:
-        particles = init_particles.clone()
+    particles = initialize_particles(n_particles, dim, init_particles, device, bounds)
 
     trajectories = [particles.detach().cpu().numpy().copy()]
 
@@ -117,18 +102,11 @@ def msip_greedy(
         # Loop over particles, one at a time
         for i in range(n_particles):
             new_list_particles = update_one_particle(
-                objective_function,
+                log_density,
                 particles,
                 idx=i,
                 lr=lr,
-                inner_tol=inner_tol,
-                max_inner_steps=max_inner_steps,
-                # bounds=bounds,
-                # projection=projection,
-                # kernel_bandwidth=kernel_bandwidth,
-                # bandwidth_factor=bandwidth_factor,
-                # gradient_informed=gradient_informed,
-                # diag_infl=diag_infl
+                bounds=bounds,
                 **msip_kwargs
             )
             # If you want a very fine-grained trajectory, record after each particle:
@@ -139,4 +117,4 @@ def msip_greedy(
         # If you prefer only one snapshot per epoch, move the append here instead:
         # trajectories.append(particles.detach().cpu().numpy().copy())
 
-    return torch.tensor(trajectories), bounds
+    return torch.tensor(trajectories)

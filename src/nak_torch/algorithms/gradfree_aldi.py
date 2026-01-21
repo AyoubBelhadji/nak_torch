@@ -6,7 +6,7 @@ from nak_torch.tools.types import BatchPtType, GaussianModel
 import warnings
 from tqdm import tqdm
 import numpy as np
-from nak_torch.tools.util import sym_sqrtm
+from nak_torch.tools.util import initialize_particles, sym_sqrtm
 
 
 def build_gradfree_aldi_step(model: GaussianModel, rng: torch.Generator):
@@ -82,18 +82,12 @@ def gradfree_aldi(
     if seed is not None:
         rng.manual_seed(seed)
 
-    particles: Tensor
-    if init_particles is None:
-        if bounds is None:
-            particles = torch.normal(0.0, 1.0, (n_particles, dim), generator=rng, device=device)
-        else:
-            particles = torch.empty((n_particles, dim), device=device).uniform_(*bounds)
-    else:
-        particles = torch.as_tensor(init_particles, device=device).clone()
+    particles = initialize_particles(n_particles, dim, init_particles, device, bounds, rng)
 
     if keep_all:
         trajectories = torch.empty(
-            (n_steps, *particles.shape), dtype=particles.dtype)
+            (n_steps, *particles.shape), device=device, dtype=particles.dtype
+        )
         trajectories[0].copy_(particles)
     else:
         trajectories = torch.empty(())
@@ -112,7 +106,4 @@ def gradfree_aldi(
         if keep_all:
             trajectories[idx].copy_(particles)
 
-    if keep_all:
-        return trajectories, bounds
-    else:
-        return particles.unsqueeze_(0), bounds
+    return trajectories.detach_() if keep_all else particles.unsqueeze_(0)

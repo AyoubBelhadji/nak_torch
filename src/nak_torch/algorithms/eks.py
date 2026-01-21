@@ -6,7 +6,7 @@ from nak_torch.tools.types import BatchPtType, GaussianModel
 import warnings
 from tqdm import tqdm
 import numpy as np
-from nak_torch.tools.util import sym_sqrtm
+from nak_torch.tools.util import sym_sqrtm, initialize_particles
 
 
 def build_eks_step(eks_model: GaussianModel, dt: float):
@@ -56,10 +56,12 @@ def build_eks_step(eks_model: GaussianModel, dt: float):
             raise ValueError()
 
         prior_term_premul.add_(torch.eye(dim))
-        new_particles = torch.linalg.solve(prior_term_premul, particles - likely_term, left=False)
+        new_particles = torch.linalg.solve(
+            prior_term_premul, particles - likely_term, left=False)
         return new_particles, sqrt_prior_cov
 
     return torch.compile(eks_step)
+
 
 def eks(
     eks_model: GaussianModel,
@@ -84,16 +86,13 @@ def eks(
     if seed is not None:
         rng.manual_seed(seed)
 
-    particles: Tensor
-    if init_particles is None:
-        if bounds is None:
-            particles = torch.randn((n_particles, dim), device=device)
-        else:
-            particles = torch.empty((n_particles, dim), device=device).uniform_(*bounds, generator=rng)
-    else:
-        particles = torch.as_tensor(init_particles, device=device).clone()
+    particles = initialize_particles(
+        n_particles, dim, init_particles, device, bounds, rng)
+
     if keep_all:
-        trajectories = torch.empty((n_steps, *particles.shape), dtype=particles.dtype)
+        trajectories = torch.empty(
+            (n_steps, *particles.shape), device=device, dtype=particles.dtype
+        )
         trajectories[0].copy_(particles)
     else:
         trajectories = torch.empty(())
@@ -104,7 +103,8 @@ def eks(
         forecast_obs = eks_model.forward_model(particles)
         with torch.no_grad():
             particles, noise_sqrt_cov = eks_step(particles, forecast_obs)
-            noise_tens = torch.normal(mean=0., std=1., size=particles.shape, generator=rng, out=noise_tens)
+            noise_tens = torch.normal(
+                mean=0., std=1., size=particles.shape, generator=rng, out=noise_tens)
             noise_samp = noise_tens @ noise_sqrt_cov
             particles = particles.add_(noise_samp)
             if bounds is not None:
@@ -112,7 +112,4 @@ def eks(
         if keep_all:
             trajectories[idx].copy_(particles)
 
-    if keep_all:
-        return trajectories, bounds
-    else:
-        return particles.unsqueeze_(0), bounds
+    return trajectories.detach_() if keep_all else particles.unsqueeze_(0)
