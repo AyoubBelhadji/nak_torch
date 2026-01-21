@@ -53,6 +53,7 @@ def animate_trajectories_box(
 
     if save_path:
         ani.save(save_path, writer=writer)
+        print(f"Saved animation to {save_path}!")
     else:
         plt.show()
 

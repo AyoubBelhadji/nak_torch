@@ -56,20 +56,22 @@ if __name__ == "__main__":
 
     M = 5
     bounds = (-5., 5.)
-    trajectories = msip_greedy(objective_function,
-             n_particles=M,
-             n_steps=300,          # now interpreted as "epochs" (passes over all particles)
-             dim=60,
-             bounds=bounds,
-             projection = True,
-             lr=0.5,
-             noise=0.05,          # currently unused, kept for compatibility
-             kernel_bandwidth=5.0,
-             bandwidth_factor = 0.001,#0.001,
-             inner_tol=1e-4,      # equilibrium tolerance for a particle
-             max_inner_steps=15,  # max inner iterations per particle
-             seed=None,
-             device="cpu")
+    trajectories = msip_greedy(
+        objective_function,
+        n_particles=M,
+        n_steps=300,          # now interpreted as "epochs" (passes over all particles)
+        dim=60,
+        bounds=bounds,
+        projection = True,
+        lr=0.5,
+        noise=0.05,          # currently unused, kept for compatibility
+        kernel_bandwidth=5.0,
+        bandwidth_factor = 0.001,#0.001,
+        inner_tol=1e-4,      # equilibrium tolerance for a particle
+        max_inner_steps=15,  # max inner iterations per particle
+        seed=None,
+        device="cpu"
+    )
 
     eval_tensor = eval_function_trajectories(objective_function,trajectories)
     plot_eval_tensor(eval_tensor)
