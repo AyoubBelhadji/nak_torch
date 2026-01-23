@@ -112,4 +112,4 @@ def eks(
         if keep_all:
             trajectories[idx].copy_(particles)
 
-    return trajectories.detach_() if keep_all else particles.unsqueeze_(0)
+    return trajectories.detach() if keep_all else particles.unsqueeze_(0)

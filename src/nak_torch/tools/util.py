@@ -4,11 +4,15 @@ from jaxtyping import Float
 from typing import Optional, Callable
 from .types import BatchPtType
 import numpy as np
+import inspect
 
 def sym_sqrtm(A: Float[Tensor, "n n"]):
     e, v = torch.linalg.eigh(A)
     return torch.einsum("ij,j,kj->ik", v, e.sqrt_(), v)
 
+def get_keywords(fcn: Callable):
+    sig = inspect.signature(fcn)
+    return [p.name for p in sig.parameters.values() if p.kind == p.KEYWORD_ONLY]
 
 def initialize_particles(
         n_particles: int,
@@ -36,11 +40,11 @@ def initialize_particles(
 
 def batched_grad_log_density_factory(
         log_density: Callable,
-        is_density_vectorized: bool,
+        is_log_density_batched: bool,
         grad_log_density: Optional[Callable],
 ):
     if grad_log_density is None:
-        if is_density_vectorized:
+        if is_log_density_batched:
             def grad_log_p_(pts: Float[Tensor, "batch dim"]) -> Float[Tensor, "batch dim"]:
                 pts_cl = pts.clone().requires_grad_()
                 return torch.autograd.grad(log_density(pts_cl).sum(), pts_cl)[0]

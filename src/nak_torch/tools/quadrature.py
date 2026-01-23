@@ -9,11 +9,11 @@ from typing import Optional
 # Monte Carlo on the hyperphere
 
 
-def MC_on_hypersphere(N: int, d: int, dtype: Optional[torch.dtype] = None, device: Optional[torch.device] = None):
+def MC_on_hypersphere(batch_sizes: tuple[int, ...], N: int, d: int, dtype: Optional[torch.dtype] = None, device: Optional[torch.device] = None):
     r""" Create Monte Carlo samples on the unit hypersphere"""
-    normal_pts = torch.randn(N, d, dtype=dtype, device=device)
-    pts = normal_pts / torch.linalg.norm(normal_pts, axis=1).unsqueeze_(1)
-    return pts, torch.ones(N, dtype=dtype, device=device) / N
+    normal_pts = torch.randn((*batch_sizes, N, d), dtype=dtype, device=device)
+    pts = normal_pts / torch.linalg.norm(normal_pts, axis=-1).unsqueeze_(-1)
+    return pts, torch.ones((*batch_sizes, N), dtype=dtype, device=device) / N
 
 
 def gaussian_laguerre_quadrature(N: int, alpha: float, dtype: Optional[torch.dtype] = None, device: Optional[torch.device] = None):
@@ -31,9 +31,9 @@ def gaussian_laguerre_quadrature(N: int, alpha: float, dtype: Optional[torch.dty
 
 
 def combine_radial_spherical_quadrature(
-        sph_pts: Float[Tensor, "N_s d"], sph_wts: Float[Tensor, "N_s"],
-        r_pts: Float[Tensor, "N_r d"], r_wts: Float[Tensor, "N_r"]
-) -> tuple[Float[Tensor, "N_s*N_r d"], Float[Tensor, "N_s*N_r"]]:
+        sph_pts: Float[Tensor, "N_s d"], sph_wts: Float[Tensor, " N_s"],
+        r_pts: Float[Tensor, "N_r d"], r_wts: Float[Tensor, " N_r"]
+) -> tuple[Float[Tensor, "N_s*N_r d"], Float[Tensor, " N_s*N_r"]]:
     r""" Take a spherical and radial quadrature and tensorize them appropriately """
     sph_pts_13 = sph_pts.reshape(sph_pts.shape[0], 1, sph_pts.shape[1])
     sph_wts_1 = sph_wts.reshape(-1, 1)
@@ -43,17 +43,20 @@ def combine_radial_spherical_quadrature(
     wts_combine = sph_wts_1 * r_wts_2
     return pts_combine.reshape(-1, sph_pts.shape[1]), wts_combine.reshape(-1)
 
+vmap_combine_radial_spherical_quadrature = torch.vmap(
+    combine_radial_spherical_quadrature, in_dims=(0, 0, None, None)
+)
 
 def spherical_MC_radial_Laguerre(
-        N_spherical: int, d: int, N_radial: int = 3,
+        batch_size: int, N_spherical: int, d: int, N_radial: int = 3,
         dtype: Optional[torch.dtype] = None, device: Optional[torch.device] = None
-) -> tuple[Float[Tensor, "N_s*N_r d"], Float[Tensor, "N_s*N_r"]]:
+) -> tuple[Float[Tensor, "N_s*N_r d"], Float[Tensor, " N_s*N_r"]]:
     r""" Perform MC sampling on hypersphere and appropriate Gauss--Laguerre quadrature over radius """
     alpha = d/2-1
     r_pts, r_wts = gaussian_laguerre_quadrature(N_radial, alpha, dtype, device)
-    MC_pts, MC_wts = MC_on_hypersphere(N_spherical, d, dtype, device)
+    MC_pts, MC_wts = MC_on_hypersphere((batch_size,), N_spherical, d, dtype, device)
 
-    pts, wts = combine_radial_spherical_quadrature(
+    pts, wts = vmap_combine_radial_spherical_quadrature(
         MC_pts, MC_wts, r_pts, r_wts
     )
     return pts, wts

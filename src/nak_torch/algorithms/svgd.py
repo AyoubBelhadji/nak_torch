@@ -56,7 +56,7 @@ def svgd(
     kernel_elem: KernelFunction = sqexp_kernel_elem,
     bounds: Optional[tuple[float, float]] = None,
     keep_all: bool = True,
-    is_density_vectorized: bool = False,
+    is_log_density_batched: bool = False,
     grad_log_density: Optional[BatchGradLogDensity] = None,
     **unused_kwargs
 ):
@@ -78,7 +78,7 @@ def svgd(
     else:
         trajectories = torch.empty(())
 
-    grad_log_p = batched_grad_log_density_factory(log_density, is_density_vectorized, grad_log_density)
+    grad_log_p = batched_grad_log_density_factory(log_density, is_log_density_batched, grad_log_density)
 
     step_fcn = create_svgd_step(kernel_elem, grad_log_p, kernel_bandwidth)
 
@@ -91,4 +91,4 @@ def svgd(
         if keep_all:
             trajectories[idx].copy_(particles)
 
-    return trajectories.detach_() if keep_all else particles.unsqueeze_(0)
+    return trajectories.detach() if keep_all else particles.unsqueeze_(0)

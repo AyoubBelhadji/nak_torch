@@ -7,6 +7,10 @@ from dataclasses import dataclass
 BatchType = Float[Tensor, "batch"]
 PtType = Float[Tensor, " d"]
 BatchPtType = Float[Tensor, "batch d"]
+QuadrulePtType = Float[Tensor, "quad d"]
+QuadruleWtType = Float[Tensor, "quad"]
+BatchQuadrulePtType = Float[Tensor, "batch quad d"]
+BatchQuadruleWtType = Float[Tensor, "batch quad"]
 KernelMatrixType = Float[Tensor, "batch batch"]
 
 KernelFunction = Callable[[PtType, PtType, float], Float]
@@ -21,9 +25,15 @@ GradLogDensity = Callable[[PtType], PtType]
 
 BatchLogDensity = Callable[[BatchPtType], BatchType]
 
+BatchLogDensityGradVal = Callable[[BatchPtType], tuple[BatchPtType, BatchType]]
+
+MultiBatchLogDensity = Callable[[BatchQuadrulePtType], BatchQuadruleWtType]
+
 BatchGradLogDensity = Callable[[BatchPtType], BatchPtType]
 
+MultiBatchLogDensityGradVal = Callable[[BatchQuadrulePtType], tuple[BatchQuadrulePtType, BatchQuadruleWtType]]
 
+BatchQuadratureRule = Callable[[int], tuple[BatchQuadrulePtType, BatchQuadruleWtType]]
 
 ForwardModel = Callable[
     [Float[Tensor, " dim"]], Float[Tensor, " obs"]

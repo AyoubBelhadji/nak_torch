@@ -44,7 +44,7 @@ def cbs(
     bounds: Optional[tuple[float, float]] = None,
     rng: Optional[torch.Generator] = None,
     keep_all: bool = True,
-    is_density_vectorized: bool = False,
+    is_log_density_batched: bool = False,
     **unused_kwargs
 ):
     if len(unused_kwargs) > 0:
@@ -66,7 +66,7 @@ def cbs(
     else:
         trajectories = torch.empty(())
 
-    log_p = log_density if is_density_vectorized else torch.vmap(log_density)
+    log_p = log_density if is_log_density_batched else torch.vmap(log_density)
     motion_scaling_sq = lr * 2 * (1 + inverse_temp)
 
     for idx in tqdm(range(n_steps)):
@@ -82,4 +82,4 @@ def cbs(
         if keep_all:
             trajectories[idx].copy_(particles)
 
-    return trajectories.detach_() if keep_all else particles.unsqueeze_(0)
+    return trajectories.detach() if keep_all else particles.unsqueeze_(0)

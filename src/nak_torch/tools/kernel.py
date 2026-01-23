@@ -13,19 +13,19 @@ __all__ = [
 
 def sqexp_kernel_matrix(
         particles_leaf: BatchPtType,
-        kernel_bandwidth: Float,
+        kernel_length_scale: Float,
         p_leaf2: Optional[BatchPtType] = None
 ):
     if p_leaf2 is None:
         p_leaf2 = particles_leaf
     diff = particles_leaf.unsqueeze(1) - p_leaf2.unsqueeze(0)  # (N, N, d)
 
-    return torch.exp(- (diff ** 2).sum(dim=-1) / (2 * kernel_bandwidth * kernel_bandwidth))
+    return torch.exp(- (diff ** 2).sum(dim=-1) / (2 * kernel_length_scale * kernel_length_scale))
 
 
-def sqexp_kernel_elem(x: Float[Tensor, " d"], y: Float[Tensor, " d"], kernel_bandwidth: float = 1.0) -> Float:
+def sqexp_kernel_elem(x: Float[Tensor, " d"], y: Float[Tensor, " d"], kernel_length_scale: float = 1.0) -> Float:
     torch._assert(x.shape == y.shape and y.ndim == 1, "Invalid input dimensions of x and y")
-    ret = torch.exp(- (x - y).square_().sum() / (2 * kernel_bandwidth * kernel_bandwidth))
+    ret = torch.exp(- (x - y).square_().sum() / (2 * kernel_length_scale * kernel_length_scale))
     return ret
 
 def matricize_kernel_elem(kernel: KernelFunction, use_compiled: bool = True) -> MatSelfKernelFunction:

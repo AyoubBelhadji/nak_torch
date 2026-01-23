@@ -47,9 +47,9 @@ msip_args = {
     "noise": 0.05,          # currently unused
     "init_particles": init_particles,
     "kernel_bandwidth": kernel_bandwidth,
-    "bandwidth_factor": 0.5,
+    "bandwidth_factor": 0.25,
     "seed": 0,
-    "diag_infl": 1e-10,
+    "kernel_diag_infl": 1e-10,
     "keep_all": False,
     "device": None
 }
@@ -63,7 +63,7 @@ trajectories_msip = msip(
 # %%
 trajectories_svgd = svgd(
     log_p,
-    is_density_vectorized=True,
+    is_log_density_batched=True,
     **msip_args
 )
 

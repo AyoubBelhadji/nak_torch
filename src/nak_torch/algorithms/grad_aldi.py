@@ -46,7 +46,7 @@ def grad_aldi(
     bounds: Optional[tuple[float, float]] = None,
     rng: Optional[torch.Generator] = None,
     keep_all: bool = True,
-    is_density_vectorized: bool = False,
+    is_log_density_batched: bool = False,
     grad_log_density: Optional[BatchGradLogDensity] = None,
     **unused_kwargs
 ):
@@ -58,7 +58,7 @@ def grad_aldi(
     if seed is not None:
         rng.manual_seed(seed)
 
-    grad_log_p = batched_grad_log_density_factory(log_density, is_density_vectorized, grad_log_density)
+    grad_log_p = batched_grad_log_density_factory(log_density, is_log_density_batched, grad_log_density)
     particles = initialize_particles(n_particles, dim, init_particles, device, bounds, rng)
 
     if keep_all:
@@ -83,4 +83,4 @@ def grad_aldi(
         if keep_all:
             trajectories[idx].copy_(particles)
 
-    return trajectories.detach_() if keep_all else particles.unsqueeze_(0)
+    return trajectories.detach() if keep_all else particles.unsqueeze_(0)

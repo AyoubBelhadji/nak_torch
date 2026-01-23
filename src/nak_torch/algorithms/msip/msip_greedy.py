@@ -27,7 +27,7 @@ def update_one_particle(
         # bounds: tuple[float, float] = (-torch.inf, torch.inf),
         # projection: bool = True,
         # gradient_informed: bool = True,
-        # diag_infl: float = 0.0,
+        # kernel_diag_infl: float = 0.0,
         **msip_kwargs
 ):
     """
@@ -50,7 +50,7 @@ def update_one_particle(
             # bounds,
             # projection,
             # gradient_informed,
-            # diag_infl,
+            # kernel_diag_infl,
             output_idx=idx,
             **msip_kwargs
         )
