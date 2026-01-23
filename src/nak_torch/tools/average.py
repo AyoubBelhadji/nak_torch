@@ -15,11 +15,11 @@ def recursive_weighted_average_alpha_v(
     using log-weights
     y: (N, d)   the containing the vectors $y_i$
     alpha: (N,) the array of arbitrary weights
-    v: (N,) or log_v: (N,) the array of postive weights
+    log_v: (N,) the array of postive weights
 
     Returns:
     z: (d,) see above
-    w: (1,) defined by $\sum_i v_i a_i
+    w: (1,) defined by $log(\sum_i v_i a_i)$
     """
     N, d = y.shape
     if alpha.ndim != 1 or N != alpha.shape[0]:
@@ -28,19 +28,6 @@ def recursive_weighted_average_alpha_v(
     y = torch.as_tensor(y)
     alpha = torch.as_tensor(alpha)
     N, d = y.shape
-
-    # Check the 'mode' of weighting:
-    # 1) v is given
-    # 2) log_v is given
-    # 3) v nor log_v is given
-
-    # Look for the non-vanishing a_i != 0, and restrict the average to those
-    # nonzero_alpha_mask = (alpha != 0)
-    # if nonzero_alpha_mask.sum() == 0:
-    #     raise ValueError("All alpha are zero.")
-    # y = y[nonzero_alpha_mask]
-    # alpha = alpha[nonzero_alpha_mask]
-    # log_v = log_v[nonzero_alpha_mask]
 
     # Compute log |w_i|:= log |a_i| + log |v_i|  and sign of the a_i
     log_abs_alpha = torch.log(alpha.abs())

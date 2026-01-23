@@ -1,7 +1,7 @@
 import torch
 from torch import Tensor
 from jaxtyping import Float
-from typing import Callable, Optional
+from typing import Callable, Optional, Protocol
 from dataclasses import dataclass
 
 BatchType = Float[Tensor, "batch"]
@@ -13,11 +13,16 @@ BatchQuadrulePtType = Float[Tensor, "batch quad d"]
 BatchQuadruleWtType = Float[Tensor, "batch quad"]
 KernelMatrixType = Float[Tensor, "batch batch"]
 
+MSIPEstimatorOutput = tuple[BatchType, BatchPtType]
+
 KernelFunction = Callable[[PtType, PtType, float], Float]
 
-MatSelfKernelFunction = Callable[[
-    BatchPtType, float, Optional[BatchPtType]
-], KernelMatrixType]
+class MatSelfKernelFunction(Protocol):
+    def __call__(
+        self, pts: BatchPtType,
+        kernel_length_scale: float,
+        pts2: Optional[BatchPtType] = None
+    ) -> KernelMatrixType: ...
 
 LogDensity = Callable[[PtType], Float]
 
@@ -27,11 +32,7 @@ BatchLogDensity = Callable[[BatchPtType], BatchType]
 
 BatchLogDensityGradVal = Callable[[BatchPtType], tuple[BatchPtType, BatchType]]
 
-MultiBatchLogDensity = Callable[[BatchQuadrulePtType], BatchQuadruleWtType]
-
 BatchGradLogDensity = Callable[[BatchPtType], BatchPtType]
-
-MultiBatchLogDensityGradVal = Callable[[BatchQuadrulePtType], tuple[BatchQuadrulePtType, BatchQuadruleWtType]]
 
 BatchQuadratureRule = Callable[[int], tuple[BatchQuadrulePtType, BatchQuadruleWtType]]
 
