@@ -53,13 +53,9 @@ def kernel_optimal_weight_factory(
         log_dens_evals: BatchType,
         kernel_matrix: KernelMatrixType,
 ) -> BatchType:
-
-    log_v0 = log_dens_evals.clone()
-    log_mul = log_v0.max()
-    log_v0.sub_(log_mul)
-    v0 = log_v0.exp_()
+    v0 = torch.softmax(log_dens_evals, 0)
     wts = torch.linalg.solve(kernel_matrix, v0)
-    return wts.mul_(log_mul.exp_())
+    return wts.div_(wts.sum())
 
 
 def stein_kernel_diffs_factory(kernel_fcn: KernelFunction) -> Callable[

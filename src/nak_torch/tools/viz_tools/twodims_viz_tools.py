@@ -6,29 +6,36 @@
 # Ayoub Belhadji
 # 05/12/2025
 
+from typing import Optional
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from torch import Tensor
+from jaxtyping import Float
 
 def animate_trajectories_box(
-        objective_function, trajectories,
-        frame_step, bounds, save_path=None,
-        writer='imagemagick'
+        objective_function,
+        trajectories: Float[Tensor, "T batch dim"],
+        frame_step: int,
+        bounds: tuple[Float, Float],
+        save_path: Optional[str] = None,
+        writer: str = 'imagemagick'
 ):
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.set_xlim(bounds[0] - 1, bounds[1] + 1)
     ax.set_ylim(bounds[0] - 1, bounds[1] + 1)
-
+    N_grid = 100
     # Create a background grid for the objective function
-    x = np.linspace(bounds[0] - 1, bounds[1] + 1, 100)
-    y = np.linspace(bounds[0] - 1, bounds[1] + 1, 100)
-    X, Y = np.meshgrid(x, y)
-    XY = np.stack([X.ravel(), Y.ravel()], axis=1)
-    Z = torch.exp(objective_function(torch.tensor(XY))
-                  ).detach().numpy().reshape(100, 100)
+    x = torch.linspace(bounds[0] - 1, bounds[1] + 1, N_grid)
+    y = torch.linspace(bounds[0] - 1, bounds[1] + 1, N_grid)
+    X, Y = torch.meshgrid(x, y, indexing='ij')
+    XY = torch.stack((X.flatten(), Y.flatten()), dim=1)
+    Z = torch.exp(
+        objective_function(XY)
+    ).detach().reshape(N_grid, N_grid)
 
-    contour = ax.contourf(X, Y, Z, levels=50, cmap='viridis', alpha=0.6)
+    contour = ax.contourf(X.cpu(), Y.cpu(), Z.cpu(), levels=50, cmap='viridis', alpha=0.6)
     fig.colorbar(contour, ax=ax)  # Add colorbar to show the color map key
     scat = ax.scatter([], [], s=50, color='red')
     # iteration_text = ax.text(0.02, 0.95, '', transform=ax.transAxes, fontsize=12, color='white')
@@ -40,7 +47,7 @@ def animate_trajectories_box(
         return scat,
 
     def update(frame):
-        scat.set_offsets(trajectories[frame])
+        scat.set_offsets(trajectories[frame].cpu())
         # iteration_text.set_text(f'Iteration = {frame}')
         ax.set_title(f'Iteration = {frame}')
         return scat,
@@ -51,7 +58,7 @@ def animate_trajectories_box(
         fig, update, frames=frames_list, init_func=init, blit=True, interval=100
     )
 
-    if save_path:
+    if save_path is not None:
         ani.save(save_path, writer=writer)
         print(f"Saved animation to {save_path}!")
     else:

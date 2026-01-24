@@ -30,11 +30,13 @@ def make_gaussian_post(
 ):
     forward_op = forward_op.T
     cov_post = torch.linalg.inv(
-        forward_op.T @ torch.linalg.solve(cov_li,
-                                          forward_op) + torch.linalg.inv(cov_pr)
+        forward_op.T @ torch.linalg.solve(
+            cov_li, forward_op
+        ) + torch.linalg.inv(cov_pr)
     )
-    mean_post = cov_post @ (forward_op.T @ torch.linalg.solve(cov_li,
-                            mean_li) + torch.linalg.solve(cov_pr, mean_pr))
+    mean_post = cov_post @ (forward_op.T @ torch.linalg.solve(
+        cov_li, mean_li
+    ) + torch.linalg.solve(cov_pr, mean_pr))
     return mean_post, cov_post
 
 def weighted_cov(pts: Tensor, wts: Tensor):
@@ -115,19 +117,18 @@ trajectories_cbs = cbs(
 )
 
 # %%
-kernel_length_scale = 0.10
-bounds = (-10., 10.)
-gradient_decay = 0.9
-n_particles_msip = 500
-n_steps_msip = 100
-lr_msip = 0.1
-kernel_diag_infl = 1e-5
+kernel_length_scale = 0.25
+bounds = (-100., 100.)
+gradient_decay = 1.0
+n_particles_msip = 5
+n_steps_msip = 1000
+lr_msip = 1e-2
+kernel_diag_infl = 1e-8
 msip_fredholm = MSIPFredholm(
     gradient_decay,
     post_log_dens_grad_val_batch
 )
 
-# %%
 trajectories_msip, traj_wts_msip = msip(
     msip_fredholm, n_particles_msip, n_steps_msip, dim=2,
     lr=lr_msip, init_particles=init_particles[:n_particles_msip],
@@ -136,7 +137,7 @@ trajectories_msip, traj_wts_msip = msip(
     kernel_diag_infl=kernel_diag_infl,
     bounds=bounds,
     gradient_decay=gradient_decay,
-    keep_all=False
+    keep_all=True
 )
 
 # %%
@@ -151,8 +152,8 @@ def spherical_quad(batch_size: int , N_spherical: int = 5, N_radial: int = 3):
     return pts, wts
 
 # %%
-kernel_length_scale = 1e-3
-gradient_decay = 1.
+# kernel_length_scale = 1e-3
+# gradient_decay = 1.
 msip_quadgrad = MSIPQuadGradientInformed(
     post_log_dens_grad_val_batch, mc_quad_rule,
     gradient_decay
@@ -170,35 +171,37 @@ trajectories_msip_qg, traj_wts_msip_qg = msip(
 )
 
 # %%
-n_particles_msip = 10
-kernel_length_scale = 0.15
+# n_particles_msip = 500
+# kernel_length_scale = 1e-2
 msip_quadgf = MSIPQuadGradientFree(
-    post_log_dens_batch, partial(spherical_quad, N_spherical=5, N_radial=2)
+    post_log_dens_batch, partial(mc_quad_rule, N_quad=100)
 )
 
 trajectories_msip_qgf, traj_wts_msip_qgf = msip(
-    msip_quadgf, n_particles_msip, 25, dim=2,
-    lr=0.8, init_particles=init_particles[:n_particles_msip],
+    msip_quadgf, n_particles_msip, 500, dim=2,
+    lr=1., init_particles=init_particles[:n_particles_msip],
     kernel_length_scale=kernel_length_scale,
-    kernel_diag_infl=1e-1,
+    kernel_diag_infl=1e-8,
     bounds=(-1000., 1000.),
-    keep_all=True
+    keep_all=False
 )
+
 
 # %%
 pts_eks = trajectories_eks[-1]
 pts_galdi = trajectories_galdi[-1]
 pts_gfaldi = trajectories_gfaldi[-1]
 pts_cbs = trajectories_cbs[-1]
-pts_msip = trajectories_msip[-1]
-wts_msip = traj_wts_msip[-1]
-wts_msip /= wts_msip.sum()
+idx_msip = 100
+pts_msip = trajectories_msip[idx_msip]
+wts_msip = traj_wts_msip[idx_msip]
+# wts_msip /= wts_msip.sum()
 pts_msip_qg = trajectories_msip_qg[-1]
 wts_msip_qg = traj_wts_msip_qg[-1]
 wts_msip_qg = wts_msip_qg/wts_msip_qg.sum()
 pts_msip_qgf = trajectories_msip_qgf[-1]
 wts_msip_qgf = traj_wts_msip_qgf[-1]
-wts_msip_qgf = wts_msip_qgf/wts_msip_qgf.sum()
+# wts_msip_qgf = wts_msip_qgf/wts_msip_qgf.sum()
 
 Ngrid = 100
 xgrid = torch.linspace(-1, 1, Ngrid)
@@ -216,11 +219,11 @@ ax.contour(X, Y, post_log_dens(grid_pts).reshape(Ngrid, Ngrid), levels=10)
 #            alpha=0.2, label="GradFree-ALDI")
 # ax.scatter(pts_eks[:, 0], pts_eks[:, 1], alpha=0.1, label="EKS")
 # ax.scatter(pts_cbs[:, 0], pts_cbs[:, 1], alpha=0.1, label="CBS")
-# ax.scatter(pts_msip[:, 0], pts_msip[:, 1], c=wts_msip, alpha=0.15, label="MSIP")
+s = ax.scatter(pts_msip[:, 0], pts_msip[:, 1], c=wts_msip, alpha=0.15, label="MSIP")
 # s = ax.scatter(pts_msip_qg[:, 0], pts_msip_qg[:, 1],
 #                c = wts_msip_qg, alpha=0.15, label="MSIP-QuadGrad")
-s = ax.scatter(pts_msip_qgf[:, 0], pts_msip_qgf[:, 1],
-               c = wts_msip_qgf, alpha=0.15, label="MSIP-QuadGradFree")
+# s = ax.scatter(pts_msip_qgf[:, 0], pts_msip_qgf[:, 1],
+#                c = wts_msip_qgf, alpha=0.15, label="MSIP-QuadGradFree")
 plt.colorbar(s)
 ax.set_aspect(1.0)
 ax.legend()

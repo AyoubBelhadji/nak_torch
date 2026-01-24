@@ -15,6 +15,7 @@ def calculate_msip_map(
         log_v0_evals: BatchType,
         v1_div_v0_minus_y: BatchPtType
 ) -> BatchPtType:
+
     term_v0, _ = recursive_weighted_average_alpha_v(
         particles, K_minus_one_i, log_v=log_v0_evals
     )

@@ -21,10 +21,10 @@ from nak_torch.tools.util import batched_grad_log_density_factory, initialize_pa
 def create_svgd_step(
     kernel_elem: KernelFunction,
     grad_log_p: BatchGradLogDensity,
-    bandwidth: float
+    kernel_length_scale: float
 ) -> Callable[[BatchPtType], BatchPtType]:
     kernel_grad_val = torch.func.grad_and_value(
-        lambda x, y: kernel_elem(x, y, bandwidth), argnums=1
+        lambda x, y: kernel_elem(x, y, kernel_length_scale), argnums=1
     )
     kernel_grad_val_vec = torch.vmap(
         torch.vmap(kernel_grad_val, in_dims=(None, 0)),
@@ -52,7 +52,7 @@ def svgd(
     seed: Optional[int] = None,
     device: Optional[torch.device] = None,
     init_particles: Optional[torch.Tensor | np.ndarray] = None,
-    kernel_bandwidth: float = 1.0,
+    kernel_length_scale: float = 1.0,
     kernel_elem: KernelFunction = sqexp_kernel_elem,
     bounds: Optional[tuple[float, float]] = None,
     keep_all: bool = True,
@@ -80,12 +80,12 @@ def svgd(
 
     grad_log_p = batched_grad_log_density_factory(log_density, is_log_density_batched, grad_log_density)
 
-    step_fcn = create_svgd_step(kernel_elem, grad_log_p, kernel_bandwidth)
+    step_fcn = create_svgd_step(kernel_elem, grad_log_p, kernel_length_scale)
 
     for idx in tqdm(range(n_steps)):
         particles_diff = step_fcn(particles)
         with torch.no_grad():
-            particles = (1.0 - lr) * particles + lr * particles_diff
+            particles = particles + lr * particles_diff
             if bounds is not None:
                 particles.clamp_(bounds[0], bounds[1])
         if keep_all:
