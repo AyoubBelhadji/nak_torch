@@ -129,7 +129,7 @@ plt.scatter(pts_gf[:,0], pts_gf[:,1], c=wts_gf)
 # %%
 plt.rcParams["font.family"] = 'serif'
 plt.rcParams["font.serif"] = 'NewComputerModern10'
-fig, axs = plt.subplots(1, 4, figsize=(12,3))
+fig, axs = plt.subplots(1, 4, figsize=(10.5,2.5))
 pt_list = [init_particles, pts_svgd, pts_fr, pts_gf]
 wt_list = [None, None, wts_fr, wts_gf]
 extrema_pts = [(pt.min(), pt.max()) for pt in pt_list]
@@ -140,16 +140,15 @@ titles = ["Initialization", "SVGD", "MSIP-1", "MSIP-GF"]
 title_weights = [None, None, 'heavy', 'heavy']
 for (ax, title, pt, wt, title_wt) in zip(axs, titles, pt_list, wt_list, title_weights):
     ax.set_axis_off()
-    ax.set_aspect(1.)
     ax.set_xlim(g_min, g_max)
     ax.set_ylim(g_min, 1.05*g_max)
     ax.set_title(title, fontweight=title_wt, size=20)
-    ax.contourf(X,Y,Z, levels=20, cmap="Grays")
+    ax.contourf(X[:,40:],Y[:,40:],Z[:,40:], levels=20, cmap="Grays")
     s = 25 * (1. if wt is None else ((wt.abs()/wt.abs().max())).sqrt())
     c = torch.ones(pt.shape[0])/pt.shape[0] if wt is None else wt/wt.sum()
     ax.scatter(pt[:,0], pt[:,1], s=s, c=c, vmin=vmin, vmax=vmax)
 fig.tight_layout()
-fig.savefig("figs/himmelblau_ex.pdf")
+fig.savefig("figs/himmelblau_ex.pdf", transparent=True)
 plt.show()
 
 # %%
