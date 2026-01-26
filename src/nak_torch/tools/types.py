@@ -17,12 +17,14 @@ MSIPEstimatorOutput = tuple[BatchType, BatchPtType]
 
 KernelFunction = Callable[[PtType, PtType, float], Float]
 
+
 class MatSelfKernelFunction(Protocol):
     def __call__(
         self, pts: BatchPtType,
         kernel_length_scale: float,
         pts2: Optional[BatchPtType] = None
     ) -> KernelMatrixType: ...
+
 
 LogDensity = Callable[[PtType], Float]
 
@@ -34,7 +36,8 @@ BatchLogDensityGradVal = Callable[[BatchPtType], tuple[BatchPtType, BatchType]]
 
 BatchGradLogDensity = Callable[[BatchPtType], BatchPtType]
 
-BatchQuadratureRule = Callable[[int], tuple[BatchQuadrulePtType, BatchQuadruleWtType]]
+BatchQuadratureRule = Callable[[int],
+                               tuple[BatchQuadrulePtType, BatchQuadruleWtType]]
 
 ForwardModel = Callable[
     [Float[Tensor, " dim"]], Float[Tensor, " obs"]
@@ -44,6 +47,7 @@ BatchForwardModel = Callable[
     [Float[Tensor, "batch dim"]], Float[Tensor, "batch obs"]
 ]
 
+
 @dataclass
 class GaussianModel:
     forward_model: BatchForwardModel
@@ -51,6 +55,7 @@ class GaussianModel:
     prior_precision: float | Float[Tensor, "dim dim"]
     true_obs: Float | Float[Tensor, " obs"]
     prior_mean: float | Float[Tensor, " dim"]
+
     def __init__(
             self,
             forward_model: ForwardModel | BatchForwardModel,
@@ -70,3 +75,19 @@ class GaussianModel:
         self.prior_precision = prior_precision
         self.true_obs = true_obs
         self.prior_mean = prior_mean
+
+
+def gaussian_log_dens_factory(model: GaussianModel, compile: bool = True) -> BatchLogDensity:
+    def log_dens(pts: BatchPtType) -> BatchType:
+        model_eval = model.forward_model(pts)
+        obs_error = model_eval.sub_(model.true_obs)
+        like_term = torch.square_(torch.linalg.norm(
+            obs_error, dims=-1)
+        ).mul_(model.likelihood_precision)
+        like_term.mul_(model.likelihood_precision)
+        prior_diff = pts - model.prior_mean
+        prior_term = torch.square_(torch.linalg.norm(
+            prior_diff, dims=-1
+        )).mul_(model.prior_precision)
+        return -0.5 * (prior_term + like_term)
+    return torch.compile(log_dens) if compile else log_dens

@@ -50,7 +50,7 @@ vmap_combine_radial_spherical_quadrature = torch.vmap(
 def spherical_MC_radial_Laguerre(
         batch_size: int, N_spherical: int, d: int, N_radial: int = 3,
         dtype: Optional[torch.dtype] = None, device: Optional[torch.device] = None
-) -> tuple[Float[Tensor, "N_s*N_r d"], Float[Tensor, " N_s*N_r"]]:
+) -> tuple[Float[Tensor, "batch N_s*N_r d"], Float[Tensor, "batch N_s*N_r"]]:
     r""" Perform MC sampling on hypersphere and appropriate Gauss--Laguerre quadrature over radius """
     alpha = d/2-1
     r_pts, r_wts = gaussian_laguerre_quadrature(N_radial, alpha, dtype, device)
@@ -59,4 +59,11 @@ def spherical_MC_radial_Laguerre(
     pts, wts = vmap_combine_radial_spherical_quadrature(
         MC_pts, MC_wts, r_pts, r_wts
     )
+    return pts, wts
+
+def gauss_MC(
+        batch_size: int, N_quad: int, d: int
+) -> tuple[Float[Tensor, "batch N_quad d"], Float[Tensor, "batch N_quad"]]:
+    pts = torch.randn((batch_size, N_quad, d))
+    wts = torch.ones((batch_size, N_quad)).div_(N_quad)
     return pts, wts

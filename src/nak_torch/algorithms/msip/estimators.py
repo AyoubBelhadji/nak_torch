@@ -3,6 +3,12 @@ from abc import ABC, abstractmethod
 from nak_torch.tools.average import recursive_weighted_average_alpha_v
 from nak_torch.tools.types import BatchPtType, MSIPEstimatorOutput, BatchLogDensityGradVal, BatchLogDensity, BatchQuadratureRule
 
+__all__ = [
+    "MSIPFredholm",
+    "MSIPQuadGradientFree",
+    "MSIPQuadGradientInformed"
+]
+
 class MSIPEstimator(ABC):
     @abstractmethod
     def get_v_evals(self, particles: BatchPtType, kernel_length_scale: float) -> MSIPEstimatorOutput:
