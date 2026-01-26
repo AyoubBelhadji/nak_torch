@@ -7,7 +7,7 @@ import torch
 from torch import Tensor
 
 import nak_torch
-from nak_torch.algorithms import grad_aldi, eks, gradfree_aldi, cbs, msip
+from nak_torch.algorithms import grad_aldi, eks, gradfree_aldi, cbs, msip, kfrflow
 from nak_torch.algorithms.msip import MSIPFredholm, MSIPQuadGradientInformed, MSIPQuadGradientFree
 from nak_torch.tools.quadrature import spherical_MC_radial_Laguerre
 
@@ -39,10 +39,12 @@ def make_gaussian_post(
     ) + torch.linalg.solve(cov_pr, mean_pr))
     return mean_post, cov_post
 
+
 def weighted_cov(pts: Tensor, wts: Tensor):
     mean = wts @ pts
     second_moment = torch.einsum("b,bi,bj", wts, pts, pts)
     return second_moment - mean.outer(mean)
+
 
 # %%
 torch.manual_seed(1023921)
@@ -56,6 +58,13 @@ model = nak_torch.GaussianModel(
     prior_precision=0.9, true_obs=true_obs,
     is_vectorized=True
 )
+
+
+@torch.compile
+def like_log_dens(pt):
+    ll_term = model.likelihood_precision * \
+        torch.linalg.norm(pt @ obs_op - model.true_obs, dim=-1)**2
+    return -0.5 * ll_term.squeeze()
 
 
 @torch.compile
@@ -86,7 +95,9 @@ samps = torch.randn(10000, 2) @ cov_post_sqrt + mean_post
 # %%
 n_steps, n_particles = 1000, 500
 lr = 0.1
-init_particles = torch.randn((n_particles, 2))
+init_particles = torch.randn((n_particles, 2)) / \
+    model.prior_precision + model.prior_mean
+
 
 # %%
 trajectories_eks = eks(
@@ -94,6 +105,26 @@ trajectories_eks = eks(
     n_steps=n_steps, dim=2, lr=lr,
     init_particles=init_particles, keep_all=False,
 )
+
+# %%
+# init_particles = torch.randn((n_particles, 2)) + torch.tensor([3, -3])
+# delta_ts = torch.ones(1000)/1000
+n_particles_kfr = 100
+init_kfr = init_particles[:n_particles_kfr] #torch.randn((n_particles_kfr,2)) + torch.tensor([3,-5])
+def imq(pt1,pt2,h):
+    return 1/torch.sqrt(1 + (torch.linalg.norm(pt1-pt2) / h)**2)
+trajectories_kfr = kfrflow(
+    like_log_dens,
+    n_particles_kfr,
+    10000, 2,
+    init_particles=init_kfr,
+    kernel_length_scale = 1e-2,
+    kernel_diag_infl=1e-5,
+    # bounds=(-10,10),
+    # kernel_elem=imq,
+    keep_all=False
+)
+
 
 # %%
 trajectories_galdi = grad_aldi(
@@ -142,14 +173,18 @@ trajectories_msip, traj_wts_msip = msip(
 
 # %%
 
+
 def mc_quad_rule(batch_size: int, N_quad: int = 5, dim: int = 2):
     pts = torch.randn((batch_size, N_quad, dim))
     wts = torch.ones((batch_size, N_quad)).div_(N_quad)
     return pts, wts
 
-def spherical_quad(batch_size: int , N_spherical: int = 5, N_radial: int = 3):
-    pts, wts = spherical_MC_radial_Laguerre(batch_size, N_spherical, 2, N_radial)
+
+def spherical_quad(batch_size: int, N_spherical: int = 5, N_radial: int = 3):
+    pts, wts = spherical_MC_radial_Laguerre(
+        batch_size, N_spherical, 2, N_radial)
     return pts, wts
+
 
 # %%
 # kernel_length_scale = 1e-3
@@ -165,7 +200,7 @@ trajectories_msip_qg, traj_wts_msip_qg = msip(
     kernel_length_scale=kernel_length_scale,
     # is_log_density_batched=True,
     kernel_diag_infl=1e-8,
-    bounds=(-1000,1000),
+    bounds=(-1000, 1000),
     # gradient_decay=gradient_decay,
     keep_all=False
 )
@@ -189,6 +224,7 @@ trajectories_msip_qgf, traj_wts_msip_qgf = msip(
 
 # %%
 pts_eks = trajectories_eks[-1]
+pts_kfr = trajectories_kfr[-1]
 pts_galdi = trajectories_galdi[-1]
 pts_gfaldi = trajectories_gfaldi[-1]
 pts_cbs = trajectories_cbs[-1]
@@ -205,9 +241,9 @@ wts_msip_qgf = traj_wts_msip_qgf[-1]
 
 Ngrid = 100
 xgrid = torch.linspace(-1, 1, Ngrid)
-xgrid = 3 * xgrid * cov_post_sqrt[0,0] + mean_post[0]
+xgrid = 3 * xgrid * cov_post_sqrt[0, 0] + mean_post[0]
 ygrid = torch.linspace(-1, 1, Ngrid)
-ygrid = 3 * ygrid * cov_post_sqrt[1,1] + mean_post[1]
+ygrid = 3 * ygrid * cov_post_sqrt[1, 1] + mean_post[1]
 X, Y = torch.meshgrid(xgrid, ygrid, indexing="ij")
 grid_pts = torch.stack((X.flatten(), Y.flatten()), 1)
 
@@ -217,14 +253,16 @@ ax.contour(X, Y, post_log_dens(grid_pts).reshape(Ngrid, Ngrid), levels=10)
 # ax.scatter(pts_galdi[:, 0], pts_galdi[:, 1], alpha=0.2, label="Grad-ALDI")
 # ax.scatter(pts_gfaldi[:, 0], pts_gfaldi[:, 1],
 #            alpha=0.2, label="GradFree-ALDI")
+ax.scatter(pts_kfr[:,0], pts_kfr[:,1], label="KFR-I")
 # ax.scatter(pts_eks[:, 0], pts_eks[:, 1], alpha=0.1, label="EKS")
 # ax.scatter(pts_cbs[:, 0], pts_cbs[:, 1], alpha=0.1, label="CBS")
-s = ax.scatter(pts_msip[:, 0], pts_msip[:, 1], c=wts_msip, alpha=0.15, label="MSIP")
+# s = ax.scatter(pts_msip[:, 0], pts_msip[:, 1],
+            #    c=wts_msip, alpha=0.15, label="MSIP")
 # s = ax.scatter(pts_msip_qg[:, 0], pts_msip_qg[:, 1],
 #                c = wts_msip_qg, alpha=0.15, label="MSIP-QuadGrad")
 # s = ax.scatter(pts_msip_qgf[:, 0], pts_msip_qgf[:, 1],
 #                c = wts_msip_qgf, alpha=0.15, label="MSIP-QuadGradFree")
-plt.colorbar(s)
+# plt.colorbar(s)
 ax.set_aspect(1.0)
 ax.legend()
 plt.show()

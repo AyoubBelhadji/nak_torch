@@ -13,6 +13,7 @@ from .svgd import svgd
 from .grad_aldi import grad_aldi
 from .gradfree_aldi import gradfree_aldi
 from .cbs import cbs
+from .kfrflow import kfrflow
 
 
 __all__ = [
@@ -24,5 +25,6 @@ __all__ = [
     "grad_aldi",
     "gradfree_aldi",
     "eks",
-    "cbs"
+    "cbs",
+    "kfrflow"
 ]

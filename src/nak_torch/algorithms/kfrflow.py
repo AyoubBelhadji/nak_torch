@@ -14,65 +14,61 @@ from tqdm import tqdm
 from nak_torch.tools.kernel import sqexp_kernel_elem
 from jaxtyping import Float
 from torch import Tensor
-from nak_torch.tools.types import BatchLogDensity, BatchType, KernelFunction, BatchGradLogDensity, BatchPtType, KernelMatrixType, LogDensity
-from nak_torch.tools.util import batched_grad_log_density_factory, initialize_particles
-
-
-# def create_kfrflow_step(
-#     kernel_elem: KernelFunction,
-#     kernel_length_scale: float
-# ) -> Callable[[BatchPtType], BatchPtType]:
-#     kernel_grad_val = torch.func.grad_and_value(
-#         lambda x, y: kernel_elem(x, y, kernel_length_scale), argnums=1
-#     )
-#     kernel_grad_val_vec = torch.vmap(
-#         torch.vmap(kernel_grad_val, in_dims=(None, 0)),
-#         in_dims=(0, None)
-#     )
-
-#     def kfr_step_dir(points: BatchPtType):
-#         # kg[i,j,k] = grad_2(k) k(x_i, x_j), k[j,i] = k(x_i, x_j)
-#         k_grad, k_eval = kernel_grad_val_vec(points, points)
-#         # lpg[i,k] = grad(k) log_p(x_i)
-#         log_p_grad_ev = grad_log_p(points)
-#         term_1 = torch.einsum("jd,ji->id", log_p_grad_ev, k_eval)
-#         term_2 = k_grad.sum(1)
-#         return (term_1 + term_2) / points.shape[0]
-
-#     return torch.compile(kfr_step_dir)
-
+from nak_torch.tools.types import BatchLogDensity, BatchType, KernelFunction, KernelMatrixType, LogDensity
+from nak_torch.tools.util import initialize_particles
 
 @torch.compile
-def kfri_step(
+def kfr_step(
         kernel_matrix: KernelMatrixType,
         grad1_kernel_tens: Float[Tensor, "batch batch dim"],
         log_likely_eval: BatchType,
         kernel_diag_infl: float,
-        delta_t: float
+        delta_t: Float
 ):
     M_batch = log_likely_eval.shape[0]
     diffusion_matrix = torch.einsum(
         "ild,imd->lm", grad1_kernel_tens, grad1_kernel_tens
-    ) # (M, M)
+    ) # (M, M), 1/M factor cancels in creation of kernelized_wts
     diffusion_matrix[
         torch.arange(M_batch),torch.arange(M_batch)
     ] += kernel_diag_infl
-    # wts = (log_likely_eval - log_likely_eval.mean()) / M_batch # (M,)
-    log_wts = delta_t * log_likely_eval
-    wts = torch.softmax(log_wts,0)
-    shifted_wts = wts.neg_().add_(1 / M_batch)
-    kernelized_wts = kernel_matrix @ shifted_wts
+    log_wts = log_likely_eval - log_likely_eval.mean()
+    wts = log_wts * delta_t
+    kernelized_wts = kernel_matrix @ wts
     diffusion_soln = torch.linalg.solve(diffusion_matrix, kernelized_wts)
-    return torch.einsum("jkd,k->jd", grad1_kernel_tens, diffusion_soln).neg_()
+    return torch.einsum("jkd,k->jd", grad1_kernel_tens, diffusion_soln)
+
+"""
+    grad_kernel_tens = kernel.first_grad_kernel_tens(points, points)
+    kernel_mat = kernel.kernel_matrix(points, points)
+    unnorm_weights = target.dens_val(points)
+    weights = unnorm_weights - unnorm_weights.mean()
+    # Poisson integral operator
+    # Note: N_ens cancels out when you do `kernel_mat.dot(weights)` later
+    poisson_solver = jnp.einsum(
+        'ild,imd->lm', grad_kernel_tens, grad_kernel_tens
+    )
+    poisson_solver = jax.lax.cond(
+        inflation > 0,
+        lambda: poisson_solver + inflation * jnp.eye(poisson_solver.shape[0]),
+        lambda: poisson_solver
+    )
+    precond = jax.scipy.linalg.solve(
+        poisson_solver, kernel_mat.dot(weights), assume_a="sym"
+    )
+    point_diff = jnp.einsum(
+        'k,jkd->jd', precond, grad_kernel_tens
+    )
+"""
 
 def kfr_kernel_tens_factory(kernel_elem: KernelFunction):
     kernel_grad_val = torch.func.grad_and_value(kernel_elem)
-    kernel_matricization = torch.vmap(torch.vmap(
-        kernel_grad_val, in_dims = (0, None, None), out_dims=(0,0)
-    ), in_dims = (None, 0, None), out_dims=(1,1))
+    kernel_matricization = torch.vmap(
+        torch.vmap(kernel_grad_val, in_dims = (None, 0, None)
+    ), in_dims = (0, None, None))
     return kernel_matricization
 
-def kfri(
+def kfrflow(
     log_like: LogDensity | BatchLogDensity,
     n_particles: int,
     n_steps_or_delta_ts: int | Float[Tensor, " T"],
@@ -91,7 +87,7 @@ def kfri(
 ):
     if lr is not None:
         warnings.warn("learning rate is not used in KFR-I. See n_steps_or_delta_ts")
-    # TODO: Time steps
+
     if len(unused_kwargs) > 0:
         warnings.warn("Unused kwargs:\n{}".format(unused_kwargs))
 
@@ -130,7 +126,11 @@ def kfri(
         delta_t = delta_ts[idx]
         grad1_kernel_tens, kernel_mat = kernel_fcn(particles, particles, kernel_length_scale)
         log_likely_eval = log_like(particles)
-        particles_diff = kfri_step(kernel_mat, grad1_kernel_tens, log_likely_eval, kernel_diag_infl, delta_t)
+        particles_diff = kfr_step(
+            kernel_mat, grad1_kernel_tens,
+            log_likely_eval, kernel_diag_infl,
+            delta_t
+        )
         with torch.no_grad():
             particles = particles + particles_diff
             if bounds is not None:
