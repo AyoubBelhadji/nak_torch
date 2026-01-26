@@ -125,6 +125,33 @@ trajectories_kfr = kfrflow(
     keep_all=False
 )
 
+# %%
+from nak_torch.tools.kernel import sqexp_kernel_elem as kernel_elem, sqexp_kernel_matrix
+from tqdm import tqdm
+kernel_vec = torch.compile(torch.vmap(kernel_elem, in_dims=(None,0,None)))
+jac_kernel_vec = torch.vmap(torch.func.grad(kernel_elem), in_dims = (None, 0, None))
+kernel_mat = sqexp_kernel_matrix
+n_steps_kfr = 100
+delta_t = 1 / n_steps_kfr
+particles = init_particles.clone()
+kernel_length_scale = 1e-2
+grad_ks = torch.empty((n_particles, n_particles, 2))
+M_t = torch.empty((n_particles, n_particles))
+for n in tqdm(range(n_steps_kfr)):
+    log_likely_evals = like_log_dens(particles)
+    M_t.zero_()
+    for i in range(n_particles):
+        grad_K = jac_kernel_vec(particles[i], particles, kernel_length_scale)
+        grad_ks[i].copy_(grad_K)
+        M_t.add_(grad_K @ grad_K.T)
+    M_t = M_t.div_(n_particles)
+    M_t[torch.arange(n_particles), torch.arange(n_particles)] += 1e-4
+    wts_shift = log_likely_evals.mean()
+    wts = log_likely_evals.sub_(wts_shift).div_(n_particles)
+    K_mat = kernel_mat(particles, kernel_length_scale)
+    kernelized_wts = K_mat @ wts
+    particles += torch.einsum("jid,i->jd", grad_ks, torch.linalg.solve(M_t, kernelized_wts)).mul_(delta_t)
+
 
 # %%
 trajectories_galdi = grad_aldi(
@@ -224,7 +251,7 @@ trajectories_msip_qgf, traj_wts_msip_qgf = msip(
 
 # %%
 pts_eks = trajectories_eks[-1]
-pts_kfr = trajectories_kfr[-1]
+pts_kfr = particles
 pts_galdi = trajectories_galdi[-1]
 pts_gfaldi = trajectories_gfaldi[-1]
 pts_cbs = trajectories_cbs[-1]
@@ -253,7 +280,7 @@ ax.contour(X, Y, post_log_dens(grid_pts).reshape(Ngrid, Ngrid), levels=10)
 # ax.scatter(pts_galdi[:, 0], pts_galdi[:, 1], alpha=0.2, label="Grad-ALDI")
 # ax.scatter(pts_gfaldi[:, 0], pts_gfaldi[:, 1],
 #            alpha=0.2, label="GradFree-ALDI")
-ax.scatter(pts_kfr[:,0], pts_kfr[:,1], label="KFR-I")
+ax.scatter(pts_kfr[:,0], pts_kfr[:,1], label="KFR")
 # ax.scatter(pts_eks[:, 0], pts_eks[:, 1], alpha=0.1, label="EKS")
 # ax.scatter(pts_cbs[:, 0], pts_cbs[:, 1], alpha=0.1, label="CBS")
 # s = ax.scatter(pts_msip[:, 0], pts_msip[:, 1],

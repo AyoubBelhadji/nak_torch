@@ -10,7 +10,8 @@ __all__ = [
     "sqexp_kernel_elem",
     "matricize_kernel_elem",
     "stein_kernel_mat_factory",
-    "kernel_optimal_weight_factory"
+    "kernel_optimal_weight_factory",
+    "kernel_elem_dict"
 ]
 
 def sqexp_kernel_matrix(
@@ -102,3 +103,7 @@ def stein_kernel_mat_factory(
         ev_term = torch.einsum("ij,id,jd->ij", eval_kernel, grad_log_p_eval1, grad_log_p_eval2)
         return trace_kernel + grad_term_1 + grad_term_2 + ev_term
     return torch.compile(stein_kernel_mat) if use_compiled else stein_kernel_mat
+
+kernel_elem_dict = {
+    "sqexp": sqexp_kernel_elem
+}

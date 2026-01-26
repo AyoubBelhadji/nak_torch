@@ -211,7 +211,7 @@ def inv_ij_to_dof_index(k, N):
     Np1 = N + 1
     return [k-Np1*(k // Np1), (k // Np1)]
 
-def build_forward_solver_args(N, N_obs, device=None, dtype=torch.float32):
+def build_forward_solver_args(N, N_obs, device=None, dtype: Optional[torch.dtype]=torch.float32):
     h = 1 / N
     Np1 = N+1
     # Construct measurement matrix, M, for measurements
