@@ -98,3 +98,5 @@ if __name__ == '__main__':
     plt.contourf(X, Y, out.exp(), levels=20)
     plt.gca().set_aspect(1.0)
     plt.show()
+    samps = sample(torch.default_generator, 10000)
+    print(samps.T.cov())

@@ -31,7 +31,6 @@ class TestConfiguration:
     n_steps: int
     kernel_length_scale: Optional[float] = None
     device: Optional[str] = None
-    msip_estimator: Optional[str] = None
     kernel_diag_infl: Optional[float] = None
     inner_quad: Optional[str] = None
     inner_quad_kwargs: dict[str, Any] = field(default_factory=lambda: {})
@@ -58,10 +57,7 @@ def check_msip_config_valid(config: TestConfiguration):
         raise ValueError("Missing required field: kernel_diag_infl")
     if infl < 0:
         raise ValueError(f"Invalid kernel_diag_infl {infl}")
-
-    est = config.msip_estimator
-    if est is None:
-        raise ValueError("Missing required field: msip_estimator")
+    _,est = config.algorithm.split("_")
     if est not in msip_estimators:
         raise ValueError(f"Invalid MSIP estimator {est}")
     if est.lower() != "fredholm":
@@ -76,12 +72,12 @@ def check_msip_config_valid(config: TestConfiguration):
 
 def check_config_valid(config: TestConfiguration):
     alg = config.algorithm
-    if alg not in alg_dict:
+    if not (alg.startswith('msip') or alg in alg_dict):
         raise ValueError(f"Missing algorithm {alg}")
     problem = config.problem
     if problem != 'test' and problem not in problem_dict:
         raise ValueError(f"Unrecognized problem {problem}")
-    if alg == 'msip':
+    if alg.startswith('msip'):
         check_msip_config_valid(config)
     if alg == 'cbs':
         if 'inverse_temp' not in config.alg_kwargs:
@@ -143,6 +139,8 @@ def configuration_factory(config_dict: dict) -> TestConfiguration:
 
 def run_config(config: TestConfiguration) -> tuple[problems.Problem, BatchLogDensity, BatchPtType, BatchType | None]:
     alg_name = config.algorithm.lower()
+    if alg_name.startswith('msip'):
+        alg_name = 'msip'
     alg = alg_dict[alg_name]
     problem = problem_dict[config.problem + "_logpdf"]()
     model = problem.model
@@ -169,7 +167,8 @@ def run_config(config: TestConfiguration) -> tuple[problems.Problem, BatchLogDen
         **config.alg_kwargs
     }
     if alg_name == 'msip':
-        estimator = msip_estimator_factory(log_dens, config.msip_estimator, config.inner_quad, config.gradient_decay, **config.inner_quad_kwargs)
+        _,est_name = config.algorithm.lower().split("_")
+        estimator = msip_estimator_factory(log_dens, est_name, config.inner_quad, config.gradient_decay, **config.inner_quad_kwargs)
         pts, wts = alg(estimator, **kwargs)
         wts = wts[-1] / wts[-1].sum()
         return problem, log_dens, pts[-1], wts
