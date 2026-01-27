@@ -2,6 +2,9 @@
 import argparse
 import os
 import copy
+import torch
+torch.set_default_dtype(torch.float64)
+
 import run_single_test
 
 script_dir = os.path.dirname(__file__)
@@ -67,7 +70,9 @@ if __name__ == '__main__':
     print(parameters)
     # Repeat each trial N times
     matrix = arg_matrix(parameters)
-    trials: list[dict[str, int | float | str]] = (matrix if len(matrix) > 0 else [{}])*args.number
+    trials: list[dict[str, int | float | str]] = []
+    for _ in range(args.number):
+        trials.extend(copy.deepcopy(matrix))
     N = len(trials)
     if N < 1:
         raise ValueError(f"n must be >= 1, received {N}")
@@ -78,6 +83,6 @@ if __name__ == '__main__':
     else:
         print(f"Performing iterations 1,...,{N}!")
         for (j, trial) in enumerate(trials):
-            print(f'Iteration {j+1}....')
+            print(f'Iteration {j+1}, trial\n{trial}')
             trial["problem"] = args.problem
             run_single_test.run_single_test(trial)

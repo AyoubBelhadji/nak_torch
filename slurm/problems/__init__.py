@@ -4,7 +4,7 @@ from typing import Optional
 from torch import Tensor
 import torch
 from nak_torch.tools import GaussianModel
-from nak_torch.tools.types import BatchPtType, BatchLogDensity, BatchType
+from nak_torch.tools.types import BatchPtType, BatchLogDensity
 from .aristoff_bangerth import build_aristoff_bangerth
 from . import joker
 

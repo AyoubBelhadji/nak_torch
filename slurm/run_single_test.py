@@ -26,7 +26,7 @@ class TestConfiguration:
     lr: float
     n_particles: int
     dim: int
-    T_steps: int
+    n_steps: int
     kernel_length_scale: float
     device: Optional[str] = None
     msip_estimator: Optional[str] = None
@@ -38,6 +38,7 @@ class TestConfiguration:
     test_kernel: Optional[str] = None
     run_seed: Optional[int] = None
     gradient_decay: Optional[float] = None
+    alg_kwargs: dict[str, Any] = field(default_factory=lambda: {})
 
 
 alg_dict = nak_torch.algorithms.__dict__
@@ -45,6 +46,7 @@ inner_quad_dict = nak_torch.tools.quadrature.__dict__
 msip_estimators = estimators.__all__
 problem_dict: dict[str, Callable[[],problems.Problem]] = problems.__dict__
 uses_gaussian_model = ["gradfree_aldi", "eks"]
+
 
 
 def check_msip_config_valid(config: TestConfiguration):
@@ -79,6 +81,9 @@ def check_config_valid(config: TestConfiguration):
         raise ValueError(f"Unrecognized problem {problem}")
     if alg == 'msip':
         check_msip_config_valid(config)
+    if alg == 'cbs':
+        if 'inverse_temp' not in config.alg_kwargs:
+            raise ValueError("Missing algorithm kwarg 'inverse_temp'")
 
 
 def msip_estimator_factory(
@@ -137,7 +142,13 @@ def initialize_particles(
 
 
 def configuration_factory(config_dict: dict) -> TestConfiguration:
-    config = TestConfiguration(**config_dict)
+    alg_kwargs = {}
+    for (key, value) in config_dict.items():
+        if key not in TestConfiguration.__annotations__.keys():
+            alg_kwargs[key] = value
+    for key in alg_kwargs.keys():
+        config_dict.pop(key)
+    config = TestConfiguration(**config_dict, alg_kwargs=alg_kwargs)
     check_config_valid(config)
     if config.test_length_scale is None:
         config.test_length_scale = config.kernel_length_scale
@@ -173,7 +184,8 @@ def run_config(config: TestConfiguration) -> tuple[BatchLogDensity, BatchPtType,
         'keep_all': False,
         'rng': rng,
         'is_log_density_batched': True,
-        **config.__dict__
+        **config.__dict__,
+        **config.alg_kwargs
     }
     if alg_name == 'msip':
         estimator = msip_estimator_factory(log_dens, config.msip_estimator, config.inner_quad, config.gradient_decay, **config.inner_quad_kwargs)
@@ -200,7 +212,7 @@ def get_stein_mat_fcn(log_dens: BatchLogDensity, kernel_elem: KernelFunction):
     def grad_log_dens(p: BatchPtType):
         p_ = p.clone().requires_grad_(True)
         out = log_dens(p_)
-        return torch.autograd.grad(out, p_)[0]
+        return torch.autograd.grad(out.sum(), p_)[0]
     return stein_kernel_mat_factory(grad_log_dens, kernel_elem, is_grad_vectorized=True)
 
 
@@ -245,6 +257,7 @@ def get_mmd(
     kernel_mat = nak_torch.tools.kernel.matricize_kernel_elem(kernel_elem)
     if ref_samples is None:
         return None
+    print("Getting MMD...")
     N_ref = ref_samples.shape[0]
     N_chunks = (N_ref + chunk_size - 1) // chunk_size
     ref_mmd = get_self_mmd(
