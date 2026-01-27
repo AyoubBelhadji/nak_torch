@@ -1,7 +1,8 @@
 import torch
 from torch import Tensor
 from typing import Optional
-
+if __name__ == '__main__':
+    torch.set_default_dtype(torch.float64)
 theta_true = torch.tensor([
     1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
     1.0, 0.1, 0.1, 1.0, 1.0, 1.0, 1.0, 1.0,
@@ -231,7 +232,7 @@ def build_forward_solver_args(N, N_obs, device=None, dtype: Optional[torch.dtype
         [-1./6,  2./3,  -1./6,  -1./3],
         [-1./3, -1./6,   2./3,  -1./6],
         [-1./6, -1./3,  -1./6,   2./3]
-    ])
+    ], device=device)
 
     # Locate boundary labels
     boundaries = torch.concat((
@@ -303,26 +304,35 @@ def forward_solver(
         ij_to_dof_index(i_all + 1, j_all, N)
     )).repeat(4,1).reshape(4,4,-1).permute((2,0,1))
 
-    A_rows = A_idxs.flatten()
-    A_cols = A_idxs.permute((0,2,1)).flatten()
-    A_locs = A_locs.reshape(N_batch, -1).T
-    keep_rows = torch.logical_not(torch.isin(A_rows, boundaries))
-    keep_cols = torch.logical_not(torch.isin(A_cols, boundaries))
-    which_keep = torch.logical_and(keep_rows, keep_cols)
+    A_rows = A_idxs#.flatten()
+    A_cols = A_idxs.permute((0,2,1))#.flatten()
+    # A_locs = A_locs.reshape(N_batch, -1).T
+    # keep_rows = torch.logical_not(torch.isin(A_rows, boundaries))
+    # keep_cols = torch.logical_not(torch.isin(A_cols, boundaries))
+    # which_keep = torch.logical_and(keep_rows, keep_cols)
     # Enforce boundary condition: Zero out rows and columns, then
     # put a one back into the diagonal entries.
-    A_rows = torch.concat((A_rows[which_keep], boundaries))
-    A_cols = torch.concat((A_cols[which_keep], boundaries))
-    A_locs = torch.concat((A_locs[which_keep], torch.ones((len(boundaries), N_batch))))
-    A_sp_coo = torch.sparse_coo_tensor(
-        torch.stack((A_rows, A_cols)),
-        A_locs,
-        (Np1**2, Np1**2, N_batch),
-        requires_grad=True,
-        dtype=theta.dtype,
-        device=device
-    )
-    A_dens = A_sp_coo.to_dense().permute(-1, 0, 1)
+    # A_rows = torch.concat((A_rows[which_keep], boundaries))
+    # A_cols = torch.concat((A_cols[which_keep], boundaries))
+    # A_locs = torch.concat((A_locs[which_keep], torch.ones((len(boundaries), N_batch))))
+    A_dens = torch.zeros((N_batch, Np1**2, Np1**2))
+    A_rows, A_cols = A_rows.reshape(A_rows.shape[0], -1), A_cols.reshape(A_cols.shape[0], -1)
+    A_locs = A_locs.reshape(*A_locs.shape[:2], -1)
+    for idx in range(A_rows.shape[0]):
+        row_idxs, col_idxs = A_rows[idx], A_cols[idx]
+        A_dens[:,row_idxs, col_idxs] += A_locs[:,idx]
+    A_dens[:, boundaries, :] = 0.
+    A_dens[:, :, boundaries] = 0.
+    A_dens[:, boundaries, boundaries] = 1.
+    # A_sp_coo = torch.sparse_coo_tensor(
+    #     torch.stack((A_rows, A_cols)),
+    #     A_locs,
+    #     (Np1**2, Np1**2, N_batch),
+    #     requires_grad=True,
+    #     dtype=theta.dtype,
+    #     device=device
+    # )
+    # A_dens = A_sp_coo.to_dense().permute(-1, 0, 1)
 
     # Solve linear equation for coefficients, U, and then
     # get the Z vector by multiplying by the measurement matrix
