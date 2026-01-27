@@ -99,15 +99,14 @@ def msip(
         )
         trajectories[0].copy_(particles)
         traj_wts = torch.empty(
-            (n_steps, particles.shape[0]), device=device, dtype=particles.dtype
+            (n_steps+1, particles.shape[0]), device=device, dtype=particles.dtype
         )
     else:
         trajectories = torch.empty(())
-        traj_wts = torch.empty(
-            (1, particles.shape[0]), device=device, dtype=particles.dtype
-        )
+        traj_wts = torch.empty(())
 
     msip_estimator_out: MSIPEstimatorOutput
+    particle_wts: BatchType
     for idx in tqdm(range(n_steps + 1)):
         kernel_matrix = get_kernel_matrix(particles, kernel_length_scale)
         kernel_matrix[
@@ -146,5 +145,6 @@ def msip(
 
     if not keep_all:
         trajectories = particles.unsqueeze_(0)
+        traj_wts = particle_wts.unsqueeze_(0) # type: ignore
 
     return trajectories.detach(), traj_wts.detach()

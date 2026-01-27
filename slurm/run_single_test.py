@@ -151,8 +151,7 @@ def configuration_factory(config_dict: dict) -> TestConfiguration:
     config = TestConfiguration(
         **config_dict, bounds=bounds, alg_kwargs=alg_kwargs)
     if config.kernel_length_scale is None:
-        config.kernel_length_scale = 0.1 * \
-            math.sqrt(config.dim / config.n_particles)
+        config.kernel_length_scale = math.sqrt(config.dim / config.n_particles)
     check_config_valid(config)
     if config.test_length_scale is None:
         config.test_length_scale = config.kernel_length_scale
@@ -187,17 +186,16 @@ def run_config(config: TestConfiguration) -> tuple[problems.Problem, BatchLogDen
         'init_particles': init_particles,
         'keep_all': False,
         'rng': rng,
-        'is_log_density_batched': problem.is_batched,
         **config.__dict__,
         **config.alg_kwargs
     }
     if alg_name == 'msip':
         _, est_name = config.algorithm.lower().split("_")
         estimator = msip_estimator_factory(
-            log_dens, est_name, config.inner_quad, config.gradient_decay, **config.inner_quad_kwargs)
+            log_dens, est_name, config.inner_quad, config.gradient_decay, **config.inner_quad_kwargs
+        )
         pts, wts = alg(estimator, **kwargs)
-        wts = wts[-1] / wts[-1].sum()
-        return problem, log_dens, pts[-1], wts
+        return problem, log_dens, pts[-1], wts[-1]
     else:  # Not weighted
         problem_input = model if alg_name in uses_gaussian_model else log_dens
         pts = alg(problem_input, **kwargs)

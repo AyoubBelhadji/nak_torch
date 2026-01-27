@@ -36,11 +36,11 @@ def create_svgd_step(
         k_grad, k_eval = kernel_grad_val_vec(points, points)
         # lpg[i,k] = grad(k) log_p(x_i)
         log_p_grad_ev = grad_log_p(points)
-        term_1 = torch.einsum("jd,ji->id", log_p_grad_ev, k_eval)
+        term_1 = k_eval.T @ log_p_grad_ev
         term_2 = k_grad.sum(1)
         return (term_1 + term_2) / points.shape[0]
 
-    return torch.compile(svgd_step_dir)
+    return svgd_step_dir
 
 
 def svgd(
@@ -79,7 +79,6 @@ def svgd(
         trajectories = torch.empty(())
 
     grad_log_p = batched_grad_log_density_factory(log_density, is_log_density_batched, grad_log_density)
-
     step_fcn = create_svgd_step(kernel_elem, grad_log_p, kernel_length_scale)
 
     for idx in tqdm(range(n_steps)):
