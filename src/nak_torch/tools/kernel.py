@@ -29,7 +29,7 @@ default_kernel_matrix = sqexp_kernel_matrix
 
 def sqexp_kernel_elem(x: PtType, y: PtType, kernel_length_scale: float) -> Float:
     torch._assert(x.shape == y.shape and y.ndim == 1, "Invalid input dimensions of x and y")
-    ret = torch.exp(- (x - y).square_().sum() / (2 * kernel_length_scale * kernel_length_scale))
+    ret = torch.exp(- (x - y).square().sum() / (2 * kernel_length_scale * kernel_length_scale))
     return ret
 
 def matricize_kernel_elem(kernel: KernelFunction, use_compiled: bool = True) -> MatSelfKernelFunction:

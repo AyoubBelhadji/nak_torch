@@ -6,9 +6,12 @@ from .types import BatchPtType
 import numpy as np
 import inspect
 
-def sym_sqrtm(A: Float[Tensor, "n n"]):
+def sym_sqrtm(A: Float[Tensor, "n n"], use_inv: bool = False):
     e, v = torch.linalg.eigh(A)
-    return torch.einsum("ij,j,kj->ik", v, e.sqrt_(), v)
+    if use_inv:
+        return torch.einsum("ij,j,kj->ik", v, torch.reciprocal_(e.sqrt_()), v)
+    else:
+        return torch.einsum("ij,j,kj->ik", v, e.sqrt_(), v)
 
 def get_keywords(fcn: Callable):
     sig = inspect.signature(fcn)

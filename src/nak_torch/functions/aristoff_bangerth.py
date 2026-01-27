@@ -335,7 +335,7 @@ def log_likelihood(log_theta: Tensor, N, z_hat: Tensor, sig_lik_sq: float, H_obs
     theta = log_theta.exp()
     out = forward_solver(theta, N, H_obs, *solve_args)
     diff = (out @ H_obs.T) - z_hat
-    norm_sq = diff.square_().sum(-1)
+    norm_sq = diff.square().sum(-1)
     return -norm_sq/(2*sig_lik_sq)
 
 def log_prior(log_theta: Tensor, sig_pr_sq: float):

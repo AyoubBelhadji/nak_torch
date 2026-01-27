@@ -82,6 +82,8 @@ def JokerSampler(data: JokerData) -> Callable[[Any, int], Any]:
 
 logpdf: Callable[[Tensor], Tensor] = partial(joker_logpdf_full, JokerData())
 sample: Callable[[torch.Generator, int], Tensor] = JokerSampler(JokerData())
+def prior_sample(rng: torch.Generator, N_samples: int):
+    return torch.normal(0., 2., size=(N_samples, 2), generator=rng)
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt

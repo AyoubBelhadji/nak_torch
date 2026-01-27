@@ -81,12 +81,12 @@ def gaussian_log_dens_factory(model: GaussianModel, compile: bool = True) -> Bat
     def log_dens(pts: BatchPtType) -> BatchType:
         model_eval = model.forward_model(pts)
         obs_error = model_eval.sub_(model.true_obs)
-        like_term = torch.square_(torch.linalg.norm(
+        like_term = torch.square(torch.linalg.norm(
             obs_error, dims=-1)
         ).mul_(model.likelihood_precision)
         like_term.mul_(model.likelihood_precision)
         prior_diff = pts - model.prior_mean
-        prior_term = torch.square_(torch.linalg.norm(
+        prior_term = torch.square(torch.linalg.norm(
             prior_diff, dims=-1
         )).mul_(model.prior_precision)
         return -0.5 * (prior_term + like_term)

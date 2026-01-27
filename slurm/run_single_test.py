@@ -1,5 +1,5 @@
-from dataclasses import dataclass, field
-import math
+from dataclasses import asdict, dataclass, field
+from tqdm import tqdm
 
 from numpy.typing import ArrayLike
 import torch
@@ -13,6 +13,7 @@ import datetime
 from typing import Any, Callable, Optional
 from jaxtyping import Float
 import nak_torch
+from nak_torch.tools.util import sym_sqrtm
 
 MeanType = Float[ArrayLike, " dim"]
 CovType = Float[ArrayLike, "dim dim"]
@@ -22,7 +23,6 @@ CovType = Float[ArrayLike, "dim dim"]
 class TestConfiguration:
     algorithm: str
     problem: str
-    prior: str
     lr: float
     n_particles: int
     dim: int
@@ -43,7 +43,7 @@ class TestConfiguration:
 
 alg_dict = nak_torch.algorithms.__dict__
 inner_quad_dict = nak_torch.tools.quadrature.__dict__
-msip_estimators = estimators.__all__
+msip_estimators = ["fredholm", "gradientfree", "gradientinformed"]
 problem_dict: dict[str, Callable[[],problems.Problem]] = problems.__dict__
 uses_gaussian_model = ["gradfree_aldi", "eks"]
 
@@ -62,7 +62,7 @@ def check_msip_config_valid(config: TestConfiguration):
         raise ValueError("Missing required field: msip_estimator")
     if est not in msip_estimators:
         raise ValueError(f"Invalid MSIP estimator {est}")
-    if est != "MSIPFredholm":
+    if est.lower() != "fredholm":
         quad = config.inner_quad
         if quad is None:
             raise ValueError("Missing inner_quad")
@@ -99,7 +99,7 @@ def msip_estimator_factory(
         p = pts.clone().requires_grad_(True)
         out = log_dens(p)
         return torch.autograd.grad(out.sum(), p)[0], out.detach()
-    if msip_estimator.lower() == 'MSIPFredholm':
+    if msip_estimator.lower() == 'fredholm':
         if gradient_decay is None:
             raise ValueError(f"Estimator {msip_estimator} expects value gradient_decay")
         return MSIPFredholm(gradient_decay, grad_val_dens)
@@ -111,34 +111,14 @@ def msip_estimator_factory(
         def quad(batch_sz: int):
             return quad_fcn(batch_sz, **inner_quad_kwargs)
 
-        if msip_estimator == "MSIPQuadGradientFree":
+        if msip_estimator == "gradientfree":
             return MSIPQuadGradientFree(log_dens, quad)
-        elif msip_estimator == "MSIPQuadGradientInformed":
+        elif msip_estimator == "gradientinformed":
             if gradient_decay is None:
                 raise ValueError(f"Estimator {msip_estimator} expects value gradient_decay")
             return MSIPQuadGradientInformed(grad_val_dens, quad, gradient_decay)
         else:
             raise ValueError(f"Unexpected estimator name: {msip_estimator}")
-
-
-def initialize_particles(
-    prior: str,
-    n_particles: int,
-    dim: int,
-    rng: torch.Generator,
-    device: Optional[str]
-):
-    if prior.lower().startswith("normal"):
-        proc = prior[7:-1].split(";")
-        if len(proc) != 2:
-            raise ValueError(
-                "Currently only accepts prior normal(mu;sigma**2)"
-            )
-        mu_s, sigma_sq_s = proc
-        mu, sigma_sq = float(mu_s), float(sigma_sq_s)
-        return torch.normal(mean=mu, std=math.sqrt(sigma_sq), size=(n_particles, dim), generator=rng, device=device)
-    else:
-        raise ValueError("Currently only accepts prior normal(mu;sigma**2)")
 
 
 def configuration_factory(config_dict: dict) -> TestConfiguration:
@@ -157,23 +137,20 @@ def configuration_factory(config_dict: dict) -> TestConfiguration:
     return config
 
 
-def run_config(config: TestConfiguration) -> tuple[BatchLogDensity, BatchPtType, BatchType | None]:
+def run_config(config: TestConfiguration) -> tuple[problems.Problem, BatchLogDensity, BatchPtType, BatchType | None]:
     alg_name = config.algorithm.lower()
     alg = alg_dict[alg_name]
     problem = problem_dict[config.problem + "_logpdf"]()
     model = problem.model
     if not isinstance(model, GaussianModel) and alg_name in uses_gaussian_model:
         raise ValueError(f"Invalid problem {config.problem} for algorithm {alg_name}")
-    prior = config.prior
     seed = config.run_seed
     if seed is None:
         raise ValueError("Invalid seed.")
     torch.set_default_device(config.device)
     rng = torch.Generator(config.device)
     rng = rng.manual_seed(seed)
-    init_particles = initialize_particles(
-        prior, config.n_particles, config.dim, rng, config.device
-    )
+    init_particles = problem.prior_sample(rng, config.n_particles)
     if isinstance(model, GaussianModel):
         log_dens = nak_torch.tools.types.gaussian_log_dens_factory(model)
     else:
@@ -191,11 +168,11 @@ def run_config(config: TestConfiguration) -> tuple[BatchLogDensity, BatchPtType,
         estimator = msip_estimator_factory(log_dens, config.msip_estimator, config.inner_quad, config.gradient_decay, **config.inner_quad_kwargs)
         pts, wts = alg(estimator, **kwargs)
         wts = wts[-1] / wts[-1].sum()
-        return log_dens, pts[-1], wts
+        return problem, log_dens, pts[-1], wts
     else:  # Not weighted
         problem_input = model if alg_name in uses_gaussian_model else log_dens
         pts = alg(problem_input, **kwargs)
-        return log_dens, pts[-1], None
+        return problem, log_dens, pts[-1], None
 
 
 @dataclass
@@ -205,6 +182,8 @@ class TestOutput:
     ksd: float
     mean: Float[ArrayLike, " dim"]
     cov: Float[ArrayLike, "dim dim"]
+    rmse: float | None
+    foerstner: float | None
     sample_mmd: float | None
 
 
@@ -217,16 +196,28 @@ def get_stein_mat_fcn(log_dens: BatchLogDensity, kernel_elem: KernelFunction):
 
 
 def get_moments(
-    pts: BatchPtType, wts: Optional[BatchType]
-) -> tuple[MeanType, CovType]:
-
+    pts: BatchPtType, wts: Optional[BatchType],
+    reference_samples: Optional[BatchPtType]
+) -> tuple[MeanType, CovType, Optional[float], Optional[float]]:
     if wts is None:
-        return pts.mean(0).cpu().numpy(), pts.T.cov().cpu().numpy()
+        p_mean = pts.mean(0)
+        p_cov = pts.T.cov()
     else:
-        mean = wts @ pts
-        cov = torch.einsum("b,bi,bj", wts, pts, pts)
-        cov.div_(1 - torch.square(wts).sum())
-        return mean.cpu().numpy(), cov.cpu().numpy()
+        p_mean = wts @ pts
+        p_cov = torch.einsum("b,bi,bj", wts, pts, pts)
+        p_cov.div_(1 - torch.square(wts).sum())
+    if reference_samples is None:
+        rmse, foerstner = None, None
+    else:
+        ref_mean = reference_samples.mean(0)
+        ref_cov = reference_samples.T.cov()
+        ref_cov_inv_sqrt = sym_sqrtm(ref_cov, use_inv=True)
+        rmse = torch.linalg.norm(p_mean - ref_mean).item()
+        gen_eigvals: Tensor = torch.linalg.eigvalsh(ref_cov_inv_sqrt @ p_cov @ ref_cov_inv_sqrt)
+        foerstner = gen_eigvals.log_().square_().sum().sqrt().item()
+    p_mean = p_mean.cpu().numpy()
+    p_cov = p_cov.cpu().numpy()
+    return p_mean, p_cov, rmse, foerstner
 
 
 def get_ksd(
@@ -252,12 +243,11 @@ def get_mmd(
     kernel_elem: KernelFunction,
     test_kernel_length_scale: float,
     ref_samples: Optional[BatchPtType],
-    chunk_size: int = 1000
+    chunk_size: int = 512
 ) -> Optional[float]:
     kernel_mat = nak_torch.tools.kernel.matricize_kernel_elem(kernel_elem)
     if ref_samples is None:
         return None
-    print("Getting MMD...")
     N_ref = ref_samples.shape[0]
     N_chunks = (N_ref + chunk_size - 1) // chunk_size
     ref_mmd = get_self_mmd(
@@ -280,10 +270,9 @@ def get_mmd(
     if wts is None:
         pts_mmd = kernel_mat(pts, test_kernel_length_scale).mean()
     else:
-        K_mat = kernel_mat(pts, test_kernel_length_scale).mean()
+        K_mat = kernel_mat(pts, test_kernel_length_scale)
         pts_mmd = (K_mat @ wts) @ wts
     return torch.sqrt(ref_mmd - 2*cross_mmd + pts_mmd).item()
-
 
 def get_self_mmd(
     test_kernel_length_scale: float,
@@ -291,23 +280,23 @@ def get_self_mmd(
     kernel_mat: MatSelfKernelFunction, N_ref: int,
     N_chunks: int
 ) -> Float:
-    reference_offset = torch.zeros(())
-    for chunk_idx in range(N_chunks):
-        min_idx = chunk_idx * chunk_size
-        max_idx = min((chunk_idx + 1)*chunk_size, N_ref)
-        samples_chunk = ref_samples[min_idx:max_idx]
-        K_mat = kernel_mat(
-            samples_chunk, test_kernel_length_scale, samples_chunk
-        )
-        reference_offset += K_mat.mean()
-        for comp_chunk_idx in range(chunk_idx+1, N_chunks):
-            min_idx_comp = comp_chunk_idx * chunk_size
-            max_idx_comp = min((comp_chunk_idx + 1)*chunk_size, N_ref)
-            samples_comp = ref_samples[min_idx_comp:max_idx_comp]
-            K_mat = kernel_mat(
-                samples_chunk, test_kernel_length_scale, samples_comp)
-            reference_offset += 2 * K_mat.mean()
-    return reference_offset
+    @torch.compile
+    def self_mmd_chunk(i: int, j: int):
+        min_idx_i, max_idx_i = i*chunk_size, min((i + 1)*chunk_size, N_ref)
+        min_idx_j, max_idx_j = i*chunk_size, min((i + 1)*chunk_size, N_ref)
+        samples_chunk_i = ref_samples[min_idx_i:max_idx_i]
+        samples_chunk_j = ref_samples[min_idx_j:max_idx_j]
+        K_mat = kernel_mat(samples_chunk_i, test_kernel_length_scale, samples_chunk_j)
+        mul = 1 if i == j else 2
+        return mul * K_mat.mean()
+
+    self_mmd = torch.zeros(())
+    # prog = tqdm(range( (N_chunks * (N_chunks + 1)) // 2 ))
+    for i in range(N_chunks):
+        for j in range(i, N_chunks):
+            self_mmd += self_mmd_chunk(i, j)
+            # prog.update()
+    return self_mmd
 
 def process_output(
     log_dens: BatchLogDensity,
@@ -319,13 +308,13 @@ def process_output(
 ):
     ksd = get_ksd(log_dens, pts, wts, kernel_elem, test_kernel_length_scale)
     mmd = get_mmd(pts, wts, kernel_elem, test_kernel_length_scale, ref_samples)
-    mean, cov = get_moments(pts, wts)
+    mean, cov, rmse, foerstner = get_moments(pts, wts, ref_samples)
     pts_np = pts.cpu().numpy()
     if wts is not None:
         wts_np = wts.cpu().numpy()
     else:
         wts_np = None
-    return TestOutput(pts_np, wts_np, ksd, mean, cov, mmd)
+    return TestOutput(pts_np, wts_np, ksd, mean, cov, rmse, foerstner, mmd)
 
 all_kernels = nak_torch.tools.kernel.kernel_elem_dict
 
@@ -338,11 +327,12 @@ def run_single_test(configuration: dict):
     if config.problem == "test":
         print(config)
         return
-    log_dens, pts, wts = run_config(config)
+    prob, log_dens, pts, wts = run_config(config)
     kernel_elem = get_kernel_elem(config.test_kernel)
-    out = process_output(log_dens, pts, wts, kernel_elem, config.test_length_scale, None)
-    experiment_run = {"config": config, "output": out}
+
+    out = process_output(log_dens, pts, wts, kernel_elem, config.test_length_scale, prob.reference_samples)
+    experiment_run = {"config": asdict(config), "output": asdict(out)}
     timestamp = datetime.datetime.now()
-    save_name = f"data/{config.algorithm}_{timestamp}.pkl"
+    save_name = f"data/{config.algorithm}_{config.problem}_{timestamp}.pkl"
     with open(save_name, "wb") as f:
         pickle.dump(experiment_run, f)
