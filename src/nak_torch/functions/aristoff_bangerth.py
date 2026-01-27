@@ -217,7 +217,7 @@ def build_forward_solver_args(N, N_obs, device=None, dtype: Optional[torch.dtype
     # Construct measurement matrix, M, for measurements
     xs = torch.arange(1, N_obs+1, dtype=dtype, device=device) / (N_obs + 1)  # measurement points
 
-    XS_1, XS_2 = torch.meshgrid(xs, xs)
+    XS_1, XS_2 = torch.meshgrid(xs, xs, indexing='ij')
 
     M = torch.empty((Np1**2, N_obs**2), dtype=dtype, device=device)
     for k in range(Np1**2):

@@ -1,16 +1,16 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 
 from numpy.typing import ArrayLike
 import torch
 from torch import Tensor
-from nak_torch.tools.types import BatchLogDensity, BatchType, BatchPtType, GaussianModel, KernelFunction, MatSelfKernelFunction, PtType
+from nak_torch.tools.types import BatchLogDensity, BatchType, BatchPtType, GaussianModel, KernelFunction, MatSelfKernelFunction
 from nak_torch.algorithms.msip import estimators, MSIPFredholm, MSIPQuadGradientFree, MSIPQuadGradientInformed
 from nak_torch.tools.kernel import stein_kernel_mat_factory
 import problems
 import pickle
 import datetime
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 from jaxtyping import Float
 import nak_torch
 
@@ -21,7 +21,7 @@ CovType = Float[ArrayLike, "dim dim"]
 @dataclass
 class TestConfiguration:
     algorithm: str
-    density: str
+    problem: str
     prior: str
     lr: float
     n_particles: int
@@ -32,7 +32,7 @@ class TestConfiguration:
     msip_estimator: Optional[str] = None
     kernel_diag_infl: Optional[float] = None
     inner_quad: Optional[str] = None
-    inner_quad_kwargs: dict[str, Any] = {}
+    inner_quad_kwargs: dict[str, Any] = field(default_factory=lambda: {})
     bounds: Optional[tuple[float, float]] = None
     test_length_scale: Optional[float] = None
     test_kernel: Optional[str] = None
@@ -43,7 +43,7 @@ class TestConfiguration:
 alg_dict = nak_torch.algorithms.__dict__
 inner_quad_dict = nak_torch.tools.quadrature.__dict__
 msip_estimators = estimators.__all__
-problem_dict: dict[str, problems.Problem] = problems.__dict__
+problem_dict: dict[str, Callable[[],problems.Problem]] = problems.__dict__
 uses_gaussian_model = ["gradfree_aldi", "eks"]
 
 
@@ -74,6 +74,9 @@ def check_config_valid(config: TestConfiguration):
     alg = config.algorithm
     if alg not in alg_dict:
         raise ValueError(f"Missing algorithm {alg}")
+    problem = config.problem
+    if problem != 'test' and problem not in problem_dict:
+        raise ValueError(f"Unrecognized problem {problem}")
     if alg == 'msip':
         check_msip_config_valid(config)
 
@@ -121,16 +124,16 @@ def initialize_particles(
     device: Optional[str]
 ):
     if prior.lower().startswith("normal"):
-        proc = prior[7:-1].split(",")
+        proc = prior[7:-1].split(";")
         if len(proc) != 2:
             raise ValueError(
-                "Currently only accepts prior normal(mu,sigma**2)"
+                "Currently only accepts prior normal(mu;sigma**2)"
             )
         mu_s, sigma_sq_s = proc
         mu, sigma_sq = float(mu_s), float(sigma_sq_s)
         return torch.normal(mean=mu, std=math.sqrt(sigma_sq), size=(n_particles, dim), generator=rng, device=device)
     else:
-        raise ValueError("Currently only accepts prior normal(mu,sigma**2)")
+        raise ValueError("Currently only accepts prior normal(mu;sigma**2)")
 
 
 def configuration_factory(config_dict: dict) -> TestConfiguration:
@@ -146,10 +149,10 @@ def configuration_factory(config_dict: dict) -> TestConfiguration:
 def run_config(config: TestConfiguration) -> tuple[BatchLogDensity, BatchPtType, BatchType | None]:
     alg_name = config.algorithm.lower()
     alg = alg_dict[alg_name]
-    problem = problem_dict[config.density]
+    problem = problem_dict[config.problem + "_logpdf"]()
     model = problem.model
     if not isinstance(model, GaussianModel) and alg_name in uses_gaussian_model:
-        raise ValueError(f"Invalid problem {config.density} for algorithm {alg_name}")
+        raise ValueError(f"Invalid problem {config.problem} for algorithm {alg_name}")
     prior = config.prior
     seed = config.run_seed
     if seed is None:
@@ -319,6 +322,9 @@ def get_kernel_elem(test_kernel: str) -> KernelFunction:
 def run_single_test(configuration: dict):
     config = configuration_factory(configuration)
     assert config.test_length_scale is not None and config.test_kernel is not None
+    if config.problem == "test":
+        print(config)
+        return
     log_dens, pts, wts = run_config(config)
     kernel_elem = get_kernel_elem(config.test_kernel)
     out = process_output(log_dens, pts, wts, kernel_elem, config.test_length_scale, None)
