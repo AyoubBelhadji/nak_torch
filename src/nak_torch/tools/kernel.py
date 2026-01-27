@@ -54,7 +54,7 @@ def kernel_optimal_weight_factory(
         log_dens_evals: BatchType,
         kernel_matrix: KernelMatrixType,
 ) -> BatchType:
-    v0 = torch.softmax(log_dens_evals, 0)
+    v0 = (log_dens_evals - log_dens_evals.max()).exp_()
     wts = torch.linalg.solve(kernel_matrix, v0)
     return wts.div_(wts.sum())
 

@@ -2,7 +2,7 @@ import torch
 from torch import Tensor
 from jaxtyping import Float
 from typing import Optional, Callable
-from .types import BatchPtType
+from .types import BatchGradLogDensity, BatchPtType
 import numpy as np
 import inspect
 
@@ -45,7 +45,7 @@ def batched_grad_log_density_factory(
         log_density: Callable,
         is_log_density_batched: bool,
         grad_log_density: Optional[Callable],
-):
+) -> BatchGradLogDensity:
     if grad_log_density is None:
         if is_log_density_batched:
             def grad_log_p_(pts: Float[Tensor, "batch dim"]) -> Float[Tensor, "batch dim"]:

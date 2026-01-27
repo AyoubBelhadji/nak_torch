@@ -66,6 +66,7 @@ def msip(
     keep_all: bool = True,
     get_kernel_matrix: Optional[MatSelfKernelFunction] = None,
     kernel_diag_infl: float = 0.0,
+    verbose: bool = False,
     **msip_kwargs
 ):
     r"""
@@ -79,7 +80,7 @@ def msip(
         k: v for (k, v) in msip_kwargs.items() if k not in msip_map_used_keys
     }
 
-    if len(unused_kwargs) > 0:
+    if verbose and len(unused_kwargs) > 0:
         warnings.warn("Unused kwargs: {}".format(unused_kwargs))
 
     if seed is not None:

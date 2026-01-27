@@ -75,7 +75,7 @@ if __name__ == '__main__':
     for _ in range(args.number):
         trials.extend(copy.deepcopy(matrix))
     N = len(trials)
-    timestamp = datetime.datetime.now()
+    timestamp = '-'.join(str(datetime.datetime.now()).split())
     data_dir = os.path.join("data", f"{args.problem}_{timestamp}")
     os.mkdir(data_dir)
     if N < 1:

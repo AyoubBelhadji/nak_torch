@@ -45,9 +45,8 @@ class TestConfiguration:
 alg_dict = nak_torch.algorithms.__dict__
 inner_quad_dict = nak_torch.tools.quadrature.__dict__
 msip_estimators = ["fredholm", "gradientfree", "gradientinformed"]
-problem_dict: dict[str, Callable[[],problems.Problem]] = problems.__dict__
+problem_dict: dict[str, Callable[[], problems.Problem]] = problems.__dict__
 uses_gaussian_model = ["gradfree_aldi", "eks"]
-
 
 
 def check_msip_config_valid(config: TestConfiguration):
@@ -57,7 +56,7 @@ def check_msip_config_valid(config: TestConfiguration):
         raise ValueError("Missing required field: kernel_diag_infl")
     if infl < 0:
         raise ValueError(f"Invalid kernel_diag_infl {infl}")
-    _,est = config.algorithm.split("_")
+    _, est = config.algorithm.split("_")
     if est not in msip_estimators:
         raise ValueError(f"Invalid MSIP estimator {est}")
     if est.lower() != "fredholm":
@@ -93,17 +92,20 @@ def msip_estimator_factory(
 ) -> estimators.MSIPEstimator:
     if msip_estimator is None:
         raise ValueError("Expected value for msip_estimator")
+
     def grad_val_dens(pts: Tensor) -> tuple[BatchPtType, BatchType]:
         p = pts.clone().requires_grad_(True)
         out = log_dens(p)
         return torch.autograd.grad(out.sum(), p)[0], out.detach()
     if msip_estimator.lower() == 'fredholm':
         if gradient_decay is None:
-            raise ValueError(f"Estimator {msip_estimator} expects value gradient_decay")
+            raise ValueError(
+                f"Estimator {msip_estimator} expects value gradient_decay")
         return MSIPFredholm(gradient_decay, grad_val_dens)
     else:
         if inner_quad is None:
-            raise ValueError(f"Estimator {msip_estimator} expects value inner_quad")
+            raise ValueError(
+                f"Estimator {msip_estimator} expects value inner_quad")
         quad_fcn = inner_quad_dict[inner_quad]
 
         def quad(batch_sz: int):
@@ -113,10 +115,29 @@ def msip_estimator_factory(
             return MSIPQuadGradientFree(log_dens, quad)
         elif msip_estimator == "gradientinformed":
             if gradient_decay is None:
-                raise ValueError(f"Estimator {msip_estimator} expects value gradient_decay")
+                raise ValueError(
+                    f"Estimator {msip_estimator} expects value gradient_decay")
             return MSIPQuadGradientInformed(grad_val_dens, quad, gradient_decay)
         else:
             raise ValueError(f"Unexpected estimator name: {msip_estimator}")
+
+
+def get_bounds(bounds_str: Optional[str]) -> Optional[tuple[float, float]]:
+    if bounds_str is None:
+        return None
+    if not (bounds_str.startswith("(") and bounds_str.endswith(")")):
+        raise ValueError(
+            f"Unexpected value {bounds_str} encountered for `bounds`."
+            "Expect (lb, ub)"
+        )
+    bsplit = bounds_str[1:-1].split(";")
+    if len(bsplit) != 2:
+        raise ValueError(
+            f"Unexpected value {bounds_str} encountered for `bounds`."
+            "Expect (lb, ub)"
+        )
+    lb, ub = bsplit
+    return (float(lb), float(ub))
 
 
 def configuration_factory(config_dict: dict) -> TestConfiguration:
@@ -126,9 +147,12 @@ def configuration_factory(config_dict: dict) -> TestConfiguration:
             alg_kwargs[key] = value
     for key in alg_kwargs.keys():
         config_dict.pop(key)
-    config = TestConfiguration(**config_dict, alg_kwargs=alg_kwargs)
+    bounds = get_bounds(config_dict.pop("bounds", None))
+    config = TestConfiguration(
+        **config_dict, bounds=bounds, alg_kwargs=alg_kwargs)
     if config.kernel_length_scale is None:
-        config.kernel_length_scale = math.sqrt(config.dim / config.n_particles)
+        config.kernel_length_scale = 0.1 * \
+            math.sqrt(config.dim / config.n_particles)
     check_config_valid(config)
     if config.test_length_scale is None:
         config.test_length_scale = config.kernel_length_scale
@@ -145,7 +169,8 @@ def run_config(config: TestConfiguration) -> tuple[problems.Problem, BatchLogDen
     problem = problem_dict[config.problem + "_logpdf"]()
     model = problem.model
     if not isinstance(model, GaussianModel) and alg_name in uses_gaussian_model:
-        raise ValueError(f"Invalid problem {config.problem} for algorithm {alg_name}")
+        raise ValueError(
+            f"Invalid problem {config.problem} for algorithm {alg_name}")
     seed = config.run_seed
     if seed is None:
         raise ValueError("Invalid seed.")
@@ -162,13 +187,14 @@ def run_config(config: TestConfiguration) -> tuple[problems.Problem, BatchLogDen
         'init_particles': init_particles,
         'keep_all': False,
         'rng': rng,
-        'is_log_density_batched': True,
+        'is_log_density_batched': problem.is_batched,
         **config.__dict__,
         **config.alg_kwargs
     }
     if alg_name == 'msip':
-        _,est_name = config.algorithm.lower().split("_")
-        estimator = msip_estimator_factory(log_dens, est_name, config.inner_quad, config.gradient_decay, **config.inner_quad_kwargs)
+        _, est_name = config.algorithm.lower().split("_")
+        estimator = msip_estimator_factory(
+            log_dens, est_name, config.inner_quad, config.gradient_decay, **config.inner_quad_kwargs)
         pts, wts = alg(estimator, **kwargs)
         wts = wts[-1] / wts[-1].sum()
         return problem, log_dens, pts[-1], wts
@@ -216,7 +242,8 @@ def get_moments(
         ref_cov = reference_samples.T.cov()
         ref_cov_inv_sqrt = sym_sqrtm(ref_cov, use_inv=True)
         rmse = torch.linalg.norm(p_mean - ref_mean).item()
-        gen_eigvals: Tensor = torch.linalg.eigvalsh(ref_cov_inv_sqrt @ p_cov @ ref_cov_inv_sqrt)
+        gen_eigvals: Tensor = torch.linalg.eigvalsh(
+            ref_cov_inv_sqrt @ p_cov @ ref_cov_inv_sqrt)
         foerstner = gen_eigvals.log_().square_().sum().sqrt().item()
     p_mean = p_mean.cpu().numpy()
     p_cov = p_cov.cpu().numpy()
@@ -277,6 +304,7 @@ def get_mmd(
         pts_mmd = (K_mat @ wts) @ wts
     return torch.sqrt(ref_mmd - 2*cross_mmd + pts_mmd).item()
 
+
 def get_self_mmd(
     test_kernel_length_scale: float,
     ref_samples: BatchPtType, chunk_size: int,
@@ -289,7 +317,8 @@ def get_self_mmd(
         min_idx_j, max_idx_j = i*chunk_size, min((i + 1)*chunk_size, N_ref)
         samples_chunk_i = ref_samples[min_idx_i:max_idx_i]
         samples_chunk_j = ref_samples[min_idx_j:max_idx_j]
-        K_mat = kernel_mat(samples_chunk_i, test_kernel_length_scale, samples_chunk_j)
+        K_mat = kernel_mat(
+            samples_chunk_i, test_kernel_length_scale, samples_chunk_j)
         mul = 1 if i == j else 2
         return mul * K_mat.mean()
 
@@ -300,6 +329,7 @@ def get_self_mmd(
             self_mmd += self_mmd_chunk(i, j)
             # prog.update()
     return self_mmd
+
 
 def process_output(
     log_dens: BatchLogDensity,
@@ -319,10 +349,13 @@ def process_output(
         wts_np = None
     return TestOutput(pts_np, wts_np, ksd, mean, cov, rmse, foerstner, mmd)
 
+
 all_kernels = nak_torch.tools.kernel.kernel_elem_dict
+
 
 def get_kernel_elem(test_kernel: str) -> KernelFunction:
     return all_kernels[test_kernel]
+
 
 def run_single_test(configuration: dict, data_dir: str):
     config = configuration_factory(configuration)
@@ -336,9 +369,11 @@ def run_single_test(configuration: dict, data_dir: str):
     prob, log_dens, pts, wts = run_config(config)
     kernel_elem = get_kernel_elem(config.test_kernel)
 
-    out = process_output(log_dens, pts, wts, kernel_elem, config.test_length_scale, prob.reference_samples)
+    out = process_output(log_dens, pts, wts, kernel_elem,
+                         config.test_length_scale, prob.reference_samples)
     experiment_run = {"config": asdict(config), "output": asdict(out)}
-    timestamp = datetime.datetime.now()
-    save_name = os.path.join(data_dir, f"{config.algorithm}_{config.problem}_{timestamp}.pkl")
+    fname = f"{config.algorithm}_{config.problem}_{datetime.datetime.now()}"
+    fname = '-'.join(fname.split(' '))
+    save_name = os.path.join(data_dir, f"{fname}.pkl")
     with open(save_name, "wb") as f:
         pickle.dump(experiment_run, f)
