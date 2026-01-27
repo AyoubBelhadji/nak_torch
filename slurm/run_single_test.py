@@ -182,7 +182,7 @@ def configuration_factory(config_dict: dict) -> TestConfiguration:
     return config
 
 
-def run_config(config: TestConfiguration) -> tuple[problems.Problem, BatchLogDensity, BatchPtType, BatchType | None]:
+def run_config(config: TestConfiguration, verbose: bool) -> tuple[problems.Problem, BatchLogDensity, BatchPtType, BatchType | None]:
     alg_name = config.algorithm.lower()
     if alg_name.startswith('msip'):
         alg_name = 'msip'
@@ -208,6 +208,7 @@ def run_config(config: TestConfiguration) -> tuple[problems.Problem, BatchLogDen
         'init_particles': init_particles,
         'keep_all': False,
         'rng': rng,
+        'verbose': verbose,
         **config.__dict__,
         **config.alg_kwargs
     }
@@ -377,7 +378,7 @@ def get_kernel_elem(test_kernel: str) -> KernelFunction:
     return all_kernels[test_kernel]
 
 
-def run_single_test(configuration: dict, data_dir: str):
+def run_single_test(configuration: dict, data_dir: str, verbose: bool):
     config = configuration_factory(configuration)
     if config.test_length_scale is None:
         raise ValueError("Expected test_length_scale to be set")
@@ -386,7 +387,7 @@ def run_single_test(configuration: dict, data_dir: str):
     if config.problem == "test":
         print(config)
         return
-    prob, log_dens, pts, wts = run_config(config)
+    prob, log_dens, pts, wts = run_config(config, verbose)
     kernel_elem = get_kernel_elem(config.test_kernel)
 
     out = process_output(log_dens, pts, wts, kernel_elem,

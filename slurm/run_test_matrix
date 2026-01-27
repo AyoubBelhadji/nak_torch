@@ -67,6 +67,12 @@ if __name__ == '__main__':
         default=1
     )
 
+    parser.add_argument(
+        '-v', '--verbose',
+        help='Use verbose trials',
+        action='store_true'
+    )
+
     args, parameters = parser.parse_known_args()
     print(parameters)
     # Repeat each trial N times
@@ -83,10 +89,10 @@ if __name__ == '__main__':
     elif N == 1:
         trial = trials[0]
         trial["problem"] = args.problem
-        run_single_test.run_single_test(trial, data_dir)
+        run_single_test.run_single_test(trial, data_dir, args.verbose)
     else:
         print(f"Performing iterations 1,...,{N}!")
         for (j, trial) in enumerate(trials):
             print(f'Iteration {j+1}/{N}, trial\n{trial}')
             trial["problem"] = args.problem
-            run_single_test.run_single_test(trial, data_dir)
+            run_single_test.run_single_test(trial, data_dir, args.verbose)
