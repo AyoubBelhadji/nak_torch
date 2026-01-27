@@ -1,4 +1,6 @@
 from dataclasses import asdict, dataclass, field
+import math
+import os
 from tqdm import tqdm
 
 from numpy.typing import ArrayLike
@@ -27,7 +29,7 @@ class TestConfiguration:
     n_particles: int
     dim: int
     n_steps: int
-    kernel_length_scale: float
+    kernel_length_scale: Optional[float] = None
     device: Optional[str] = None
     msip_estimator: Optional[str] = None
     kernel_diag_infl: Optional[float] = None
@@ -129,6 +131,8 @@ def configuration_factory(config_dict: dict) -> TestConfiguration:
     for key in alg_kwargs.keys():
         config_dict.pop(key)
     config = TestConfiguration(**config_dict, alg_kwargs=alg_kwargs)
+    if config.kernel_length_scale is None:
+        config.kernel_length_scale = math.sqrt(config.dim / config.n_particles)
     check_config_valid(config)
     if config.test_length_scale is None:
         config.test_length_scale = config.kernel_length_scale
@@ -321,9 +325,12 @@ all_kernels = nak_torch.tools.kernel.kernel_elem_dict
 def get_kernel_elem(test_kernel: str) -> KernelFunction:
     return all_kernels[test_kernel]
 
-def run_single_test(configuration: dict):
+def run_single_test(configuration: dict, data_dir: str):
     config = configuration_factory(configuration)
-    assert config.test_length_scale is not None and config.test_kernel is not None
+    if config.test_length_scale is None:
+        raise ValueError("Expected test_length_scale to be set")
+    if config.test_kernel is None:
+        raise ValueError("Expected test_kernel to be set")
     if config.problem == "test":
         print(config)
         return
@@ -333,6 +340,6 @@ def run_single_test(configuration: dict):
     out = process_output(log_dens, pts, wts, kernel_elem, config.test_length_scale, prob.reference_samples)
     experiment_run = {"config": asdict(config), "output": asdict(out)}
     timestamp = datetime.datetime.now()
-    save_name = f"data/{config.algorithm}_{config.problem}_{timestamp}.pkl"
+    save_name = os.path.join(data_dir, f"{config.algorithm}_{config.problem}_{timestamp}.pkl")
     with open(save_name, "wb") as f:
         pickle.dump(experiment_run, f)
