@@ -1,12 +1,10 @@
 import torch
 from typing import Optional
-from jaxtyping import Float
-from torch import Tensor
-from nak_torch.tools.types import BatchType, BatchGradLogDensity, BatchPtType
+from nak_torch.tools.types import BatchType, BatchPtType
 import warnings
 from tqdm import tqdm
 import numpy as np
-from nak_torch.tools.util import batched_grad_log_density_factory, initialize_particles, sym_sqrtm
+from nak_torch.tools.util import initialize_particles, sym_sqrtm
 
 
 @torch.compile

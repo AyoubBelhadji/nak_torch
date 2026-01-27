@@ -1,7 +1,8 @@
 from dataclasses import asdict, dataclass, field
 import math
 import os
-from tqdm import tqdm
+import random
+import sys
 
 from numpy.typing import ArrayLike
 import torch
@@ -178,7 +179,7 @@ def configuration_factory(config_dict: dict) -> TestConfiguration:
     if config.test_length_scale is None:
         config.test_length_scale = config.kernel_length_scale
     if config.run_seed is None:
-        config.run_seed = torch.default_generator.initial_seed()
+        config.run_seed = random.randint(0, sys.maxsize >> 8)
     return config
 
 

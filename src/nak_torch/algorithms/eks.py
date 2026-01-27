@@ -76,7 +76,7 @@ def eks(
     bounds: Optional[tuple[float, float]] = None,
     keep_all: bool = True,
     rng: Optional[torch.Generator] = None,
-    verbose: bool,
+    verbose: bool = False,
     **unused_kwargs
 ):
     if verbose and len(unused_kwargs) > 0:
