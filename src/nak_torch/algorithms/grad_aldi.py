@@ -48,9 +48,10 @@ def grad_aldi(
     keep_all: bool = True,
     is_log_density_batched: bool = False,
     grad_log_density: Optional[BatchGradLogDensity] = None,
+    verbose: bool = False,
     **unused_kwargs
 ):
-    if len(unused_kwargs) > 0:
+    if verbose and len(unused_kwargs) > 0:
         warnings.warn("Unused kwargs:\n{}".format(unused_kwargs))
 
     if rng is None:
@@ -71,7 +72,7 @@ def grad_aldi(
 
     sqrt_lr = torch.sqrt(torch.tensor(lr))
 
-    for idx in tqdm(range(n_steps)):
+    for idx in tqdm(range(n_steps), disable=not verbose):
         grad_log_dens_eval = grad_log_p(particles)
         with torch.no_grad():
             particles_diff, particles_noise = grad_aldi_step(particles, grad_log_dens_eval, rng)

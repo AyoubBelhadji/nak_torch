@@ -76,9 +76,10 @@ def eks(
     bounds: Optional[tuple[float, float]] = None,
     keep_all: bool = True,
     rng: Optional[torch.Generator] = None,
+    verbose: bool,
     **unused_kwargs
 ):
-    if len(unused_kwargs) > 0:
+    if verbose and len(unused_kwargs) > 0:
         warnings.warn("Unused kwargs:\n{}".format(unused_kwargs))
 
     if rng is None:
@@ -99,7 +100,7 @@ def eks(
 
     eks_step = build_eks_step(eks_model, lr)
     noise_tens = torch.empty_like(particles)
-    for idx in tqdm(range(n_steps)):
+    for idx in tqdm(range(n_steps), disable=not verbose):
         forecast_obs = eks_model.forward_model(particles)
         with torch.no_grad():
             particles, noise_sqrt_cov = eks_step(particles, forecast_obs)

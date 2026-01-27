@@ -72,9 +72,10 @@ def gradfree_aldi(
     bounds: Optional[tuple[float, float]] = None,
     rng: Optional[torch.Generator] = None,
     keep_all: bool = True,
+    verbose: bool = False,
     **unused_kwargs
 ):
-    if len(unused_kwargs) > 0:
+    if verbose and len(unused_kwargs) > 0:
         warnings.warn("Unused kwargs:\n{}".format(unused_kwargs))
 
     if rng is None:
@@ -94,7 +95,7 @@ def gradfree_aldi(
     gradfree_aldi_step = build_gradfree_aldi_step(model, rng)
     sqrt_lr = torch.sqrt(torch.tensor(lr))
 
-    for idx in tqdm(range(n_steps)):
+    for idx in tqdm(range(n_steps), disable=not verbose):
         forecast_observations = model.forward_model(particles)
         with torch.no_grad():
             particles_diff, particles_noise = gradfree_aldi_step(particles, forecast_observations)

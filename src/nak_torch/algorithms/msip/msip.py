@@ -107,7 +107,7 @@ def msip(
 
     msip_estimator_out: MSIPEstimatorOutput
     particle_wts: BatchType
-    for idx in tqdm(range(n_steps + 1)):
+    for idx in tqdm(range(n_steps + 1), disable=not verbose):
         kernel_matrix = get_kernel_matrix(particles, kernel_length_scale)
         kernel_matrix[
             torch.arange(n_particles), torch.arange(n_particles)

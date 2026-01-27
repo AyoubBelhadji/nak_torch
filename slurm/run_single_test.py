@@ -66,7 +66,8 @@ def check_msip_config_valid(config: TestConfiguration):
         if quad not in inner_quad_dict:
             raise ValueError(f"Invalid inner_quad value {quad}")
         inner_quad_dict[quad](
-            2, **config.inner_quad_kwargs)  # check quadrature
+            2, **config.inner_quad_kwargs   # check quadrature
+        )
 
 
 def check_config_valid(config: TestConfiguration):
@@ -142,14 +143,35 @@ def get_bounds(bounds_str: Optional[str]) -> Optional[tuple[float, float]]:
 
 def configuration_factory(config_dict: dict) -> TestConfiguration:
     alg_kwargs = {}
+    alg_specific = {}
+    alg_name = config_dict.get("algorithm", None)
+    if alg_name is None:
+        raise ValueError("Expected field `algorithm`")
+    dim = config_dict.get("dim", None)
+    if dim is None:
+        raise ValueError("Expected field `dim`")
+    inner_quad_kwargs = {}
     for (key, value) in config_dict.items():
-        if key not in TestConfiguration.__annotations__.keys():
+        key_l = key.lower()
+        if key_l not in TestConfiguration.__annotations__.keys():
             alg_kwargs[key] = value
+        if key_l.startswith(alg_name.lower() + "_"):
+            alg_specific[key[len(alg_name) + 1:]] = value
+        if key_l.startswith("inner_quad_"):
+            inner_quad_kwargs[key[len("inner_quad_"):]] = value
     for key in alg_kwargs.keys():
         config_dict.pop(key)
+    for key in inner_quad_kwargs.keys():
+        alg_kwargs.pop("inner_quad_" + key)
+    inner_quad_kwargs['d'] = dim
+    for (key,val) in alg_specific.items():
+        config_dict[key] = val
     bounds = get_bounds(config_dict.pop("bounds", None))
     config = TestConfiguration(
-        **config_dict, bounds=bounds, alg_kwargs=alg_kwargs)
+        **config_dict, bounds=bounds,
+        inner_quad_kwargs = inner_quad_kwargs,
+        alg_kwargs = alg_kwargs
+    )
     if config.kernel_length_scale is None:
         config.kernel_length_scale = math.sqrt(config.dim / config.n_particles)
     check_config_valid(config)
@@ -211,7 +233,7 @@ class TestOutput:
     cov: Float[ArrayLike, "dim dim"]
     rmse: float | None
     foerstner: float | None
-    sample_mmd: float | None
+    sample_sq_mmd: float | None
 
 
 def get_stein_mat_fcn(log_dens: BatchLogDensity, kernel_elem: KernelFunction):
@@ -232,7 +254,6 @@ def get_moments(
     else:
         p_mean = wts @ pts
         p_cov = torch.einsum("b,bi,bj", wts, pts, pts)
-        p_cov.div_(1 - torch.square(wts).sum())
     if reference_samples is None:
         rmse, foerstner = None, None
     else:
@@ -241,7 +262,8 @@ def get_moments(
         ref_cov_inv_sqrt = sym_sqrtm(ref_cov, use_inv=True)
         rmse = torch.linalg.norm(p_mean - ref_mean).item()
         gen_eigvals: Tensor = torch.linalg.eigvalsh(
-            ref_cov_inv_sqrt @ p_cov @ ref_cov_inv_sqrt)
+            ref_cov_inv_sqrt @ p_cov @ ref_cov_inv_sqrt
+        )
         foerstner = gen_eigvals.log_().square_().sum().sqrt().item()
     p_mean = p_mean.cpu().numpy()
     p_cov = p_cov.cpu().numpy()
@@ -300,7 +322,7 @@ def get_mmd(
     else:
         K_mat = kernel_mat(pts, test_kernel_length_scale)
         pts_mmd = (K_mat @ wts) @ wts
-    return torch.sqrt(ref_mmd - 2*cross_mmd + pts_mmd).item()
+    return (ref_mmd - 2*cross_mmd + pts_mmd).item()
 
 
 def get_self_mmd(

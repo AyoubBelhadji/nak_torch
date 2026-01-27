@@ -122,7 +122,7 @@ def kfrflow(
 
     kernel_fcn = kfr_kernel_tens_factory(kernel_elem)
 
-    for idx in tqdm(range(n_steps)):
+    for idx in tqdm(range(n_steps), disable=not verbose):
         delta_t = delta_ts[idx]
         grad1_kernel_tens, kernel_mat = kernel_fcn(particles, particles, kernel_length_scale)
         log_likely_eval = log_like(particles)

@@ -45,9 +45,10 @@ def cbs(
     rng: Optional[torch.Generator] = None,
     keep_all: bool = True,
     is_log_density_batched: bool = False,
+    verbose: bool = False,
     **unused_kwargs
 ):
-    if len(unused_kwargs) > 0:
+    if verbose and len(unused_kwargs) > 0:
         warnings.warn("Unused kwargs:\n{}".format(unused_kwargs))
 
     if rng is None:
@@ -69,7 +70,7 @@ def cbs(
     log_p = log_density if is_log_density_batched else torch.vmap(log_density)
     motion_scaling_sq = lr * 2 * (1 + inverse_temp)
 
-    for idx in tqdm(range(n_steps)):
+    for idx in tqdm(range(n_steps), disable=not verbose):
         log_dens_eval = log_p(particles)
         with torch.no_grad():
             particles_diff, particles_noise = cbs_step(

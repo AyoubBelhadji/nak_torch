@@ -58,9 +58,10 @@ def svgd(
     keep_all: bool = True,
     is_log_density_batched: bool = False,
     grad_log_density: Optional[BatchGradLogDensity] = None,
+    verbose: bool = False,
     **unused_kwargs
 ):
-    if len(unused_kwargs) > 0:
+    if verbose and len(unused_kwargs) > 0:
         warnings.warn("Unused kwargs:\n{}".format(unused_kwargs))
 
     if seed is not None:
@@ -81,7 +82,7 @@ def svgd(
     grad_log_p = batched_grad_log_density_factory(log_density, is_log_density_batched, grad_log_density)
     step_fcn = create_svgd_step(kernel_elem, grad_log_p, kernel_length_scale)
 
-    for idx in tqdm(range(n_steps)):
+    for idx in tqdm(range(n_steps), disable=not verbose):
         particles_diff = step_fcn(particles)
         with torch.no_grad():
             particles = particles + lr * particles_diff

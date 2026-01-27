@@ -87,6 +87,6 @@ if __name__ == '__main__':
     else:
         print(f"Performing iterations 1,...,{N}!")
         for (j, trial) in enumerate(trials):
-            print(f'Iteration {j+1}, trial\n{trial}')
+            print(f'Iteration {j+1}/{N}, trial\n{trial}')
             trial["problem"] = args.problem
             run_single_test.run_single_test(trial, data_dir)
