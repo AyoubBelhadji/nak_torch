@@ -195,7 +195,7 @@ def run_config(config: TestConfiguration, verbose: bool) -> tuple[problems.Probl
     seed = config.run_seed
     if seed is None:
         raise ValueError("Invalid seed.")
-    rng = torch.Generator(torch.get_default_device())
+    rng = torch.Generator()
     rng = rng.manual_seed(seed)
     init_particles = problem.prior_sample(rng, config.n_particles)
     if isinstance(model, GaussianModel):

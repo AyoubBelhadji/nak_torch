@@ -21,7 +21,7 @@ TEST_KERNEL_LENGTH_SCALE=64.0
 GRADIENT_DECAY=0.9
 KERNEL_DIAG_INFL=1e-5
 BOUNDS="(-10;10)"
-DEVICE=cuda
+DEVICE=cuda:0
 
 curr_dir=$(pwd)
 my_dir=$(dirname -- "$( readlink -f -- "$0"; )")
