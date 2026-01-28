@@ -94,11 +94,10 @@ def msip_estimator_factory(
 ) -> estimators.MSIPEstimator:
     if msip_estimator is None:
         raise ValueError("Expected value for msip_estimator")
-
-    def grad_val_dens(pts: Tensor) -> tuple[BatchPtType, BatchType]:
-        p = pts.clone().requires_grad_(True)
-        out = log_dens(p)
-        return torch.autograd.grad(out.sum(), p)[0], out.detach()
+    def eval_log_dens(pts):
+        out = log_dens(pts)
+        return out.sum(), out
+    grad_val_dens = torch.func.grad(eval_log_dens, has_aux=True)
     if msip_estimator.lower() == 'fredholm':
         if gradient_decay is None:
             raise ValueError(
@@ -210,6 +209,7 @@ def run_config(config: TestConfiguration, verbose: bool) -> tuple[problems.Probl
         'keep_all': False,
         'rng': rng,
         'verbose': verbose,
+        'is_log_density_batched': True,
         **config.__dict__,
         **config.alg_kwargs
     }
@@ -240,10 +240,7 @@ class TestOutput:
 
 
 def get_stein_mat_fcn(log_dens: BatchLogDensity, kernel_elem: KernelFunction):
-    def grad_log_dens(p: BatchPtType):
-        p_ = p.clone().requires_grad_(True)
-        out = log_dens(p_)
-        return torch.autograd.grad(out.sum(), p_)[0]
+    grad_log_dens = torch.func.grad(lambda p: log_dens(p).sum())
     return stein_kernel_mat_factory(grad_log_dens, kernel_elem, is_grad_vectorized=True)
 
 

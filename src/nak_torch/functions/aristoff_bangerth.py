@@ -251,8 +251,6 @@ def build_forward_solver_args(N, N_obs, device=None, dtype: Optional[torch.dtype
 ###########################################################################
 ###################### forward solver function ############################
 ###########################################################################
-torch.compiler.allow_in_graph(torch.sparse_coo_tensor)
-
 def forward_solver(
         theta: Tensor, # (64,)
         N: int,
@@ -279,12 +277,10 @@ def forward_solver(
     :return: Evaluation of PDE on mesh
     :rtype: Array
     """
-    was_one_dim = False
-    if theta.ndim == 1:
-        was_one_dim = True
-        theta = theta.reshape(1, -1)
-    N_batch = theta.shape[0]
     # Initialize matrix A for FEM linear solve, AU = b
+    assert theta.ndim == 2
+    assert theta.shape[1] == 64
+    N_batch = theta.shape[0]
     Np1 = N + 1
     num_patch = 8
     frac = num_patch / N
@@ -296,7 +292,7 @@ def forward_solver(
         patch_i, patch_j = torch.floor(i * frac), torch.floor(j * frac)
         return i, j, torch.as_tensor(patch_i + patch_j * num_patch, dtype=torch.int32, device=device)
     i_all, j_all, patch_idxs = torch.vmap(get_patch_idx)(torch.arange(N**2, device=device))
-    A_locs = patch_vals[:,patch_idxs]
+    A_locs = patch_vals[:, patch_idxs]
     A_idxs = torch.stack((
         ij_to_dof_index(i_all, j_all, N),
         ij_to_dof_index(i_all, j_all + 1, N),
@@ -304,42 +300,34 @@ def forward_solver(
         ij_to_dof_index(i_all + 1, j_all, N)
     )).repeat(4,1).reshape(4,4,-1).permute((2,0,1))
 
-    A_rows = A_idxs#.flatten()
-    A_cols = A_idxs.permute((0,2,1))#.flatten()
-    # A_locs = A_locs.reshape(N_batch, -1).T
-    # keep_rows = torch.logical_not(torch.isin(A_rows, boundaries))
-    # keep_cols = torch.logical_not(torch.isin(A_cols, boundaries))
-    # which_keep = torch.logical_and(keep_rows, keep_cols)
-    # Enforce boundary condition: Zero out rows and columns, then
-    # put a one back into the diagonal entries.
-    # A_rows = torch.concat((A_rows[which_keep], boundaries))
-    # A_cols = torch.concat((A_cols[which_keep], boundaries))
-    # A_locs = torch.concat((A_locs[which_keep], torch.ones((len(boundaries), N_batch))))
+    A_rows = A_idxs
+    A_cols = A_idxs.permute((0,2,1))
     A_dens = torch.zeros((N_batch, Np1**2, Np1**2))
-    A_rows, A_cols = A_rows.reshape(A_rows.shape[0], -1), A_cols.reshape(A_cols.shape[0], -1)
-    A_locs = A_locs.reshape(*A_locs.shape[:2], -1)
-    for idx in range(A_rows.shape[0]):
-        row_idxs, col_idxs = A_rows[idx], A_cols[idx]
-        A_dens[:,row_idxs, col_idxs] += A_locs[:,idx]
-    A_dens[:, boundaries, :] = 0.
-    A_dens[:, :, boundaries] = 0.
-    A_dens[:, boundaries, boundaries] = 1.
-    # A_sp_coo = torch.sparse_coo_tensor(
-    #     torch.stack((A_rows, A_cols)),
-    #     A_locs,
-    #     (Np1**2, Np1**2, N_batch),
-    #     requires_grad=True,
-    #     dtype=theta.dtype,
-    #     device=device
-    # )
-    # A_dens = A_sp_coo.to_dense().permute(-1, 0, 1)
+    # Unroll loop
+    A_dens[:,A_rows[:,0,0],A_cols[:,0,0]] += A_locs[:,:,0,0]
+    A_dens[:,A_rows[:,0,1],A_cols[:,0,1]] += A_locs[:,:,0,1]
+    A_dens[:,A_rows[:,0,2],A_cols[:,0,2]] += A_locs[:,:,0,2]
+    A_dens[:,A_rows[:,0,3],A_cols[:,0,3]] += A_locs[:,:,0,3]
+    A_dens[:,A_rows[:,1,0],A_cols[:,1,0]] += A_locs[:,:,1,0]
+    A_dens[:,A_rows[:,1,1],A_cols[:,1,1]] += A_locs[:,:,1,1]
+    A_dens[:,A_rows[:,1,2],A_cols[:,1,2]] += A_locs[:,:,1,2]
+    A_dens[:,A_rows[:,1,3],A_cols[:,1,3]] += A_locs[:,:,1,3]
+    A_dens[:,A_rows[:,2,0],A_cols[:,2,0]] += A_locs[:,:,2,0]
+    A_dens[:,A_rows[:,2,1],A_cols[:,2,1]] += A_locs[:,:,2,1]
+    A_dens[:,A_rows[:,2,2],A_cols[:,2,2]] += A_locs[:,:,2,2]
+    A_dens[:,A_rows[:,2,3],A_cols[:,2,3]] += A_locs[:,:,2,3]
+    A_dens[:,A_rows[:,3,0],A_cols[:,3,0]] += A_locs[:,:,3,0]
+    A_dens[:,A_rows[:,3,1],A_cols[:,3,1]] += A_locs[:,:,3,1]
+    A_dens[:,A_rows[:,3,2],A_cols[:,3,2]] += A_locs[:,:,3,2]
+    A_dens[:,A_rows[:,3,3],A_cols[:,3,3]] += A_locs[:,:,3,3]
+
+    A_dens[:,boundaries, :] = 0.
+    A_dens[:,:,boundaries] = 0.
+    A_dens[:,boundaries, boundaries] = 1.
 
     # Solve linear equation for coefficients, U, and then
     # get the Z vector by multiplying by the measurement matrix
-    u = torch.linalg.solve(A_dens, b.repeat(N_batch, 1), )
-    if was_one_dim:
-        u = torch.flatten(u)
-    return u
+    return torch.linalg.solve(A_dens, b.repeat(N_batch,1))
 
 def log_likelihood(log_theta: Tensor, N, z_hat: Tensor, sig_lik_sq: float, H_obs: Tensor, *solve_args):
     theta = log_theta.exp()

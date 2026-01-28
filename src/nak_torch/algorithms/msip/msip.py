@@ -33,14 +33,10 @@ def process_msip_density(
         return log_density
     log_density_grad_val: BatchLogDensityGradVal
     if is_log_density_batched:
-        def log_density_grad_val_(particles: BatchPtType) -> tuple[BatchPtType, BatchType]:
-            particles_copy = particles.clone().requires_grad_(True)
-            log_dens_eval = log_density(particles_copy)
-            grad_log_dens_eval, = torch.autograd.grad(
-                log_dens_eval.sum(), particles_copy
-            )
-            return grad_log_dens_eval, log_dens_eval
-        log_density_grad_val = log_density_grad_val_
+        def dens_eval(_p):
+            out = log_density(_p)
+            return out.sum(), out
+        log_density_grad_val = torch.func.grad(dens_eval, has_aux=True)
     else:
         log_density_grad_val = torch.vmap(
             torch.func.grad_and_value(log_density))
@@ -116,7 +112,6 @@ def msip(
         msip_estimator_out = msip_estimator.get_v_evals(
             particles, kernel_length_scale
         )
-
         particle_wts = get_msip_wts(
             particles, msip_estimator_out,
             kernel_matrix

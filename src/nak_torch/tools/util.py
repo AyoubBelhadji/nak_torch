@@ -48,10 +48,7 @@ def batched_grad_log_density_factory(
 ) -> BatchGradLogDensity:
     if grad_log_density is None:
         if is_log_density_batched:
-            def grad_log_p_(pts: Float[Tensor, "batch dim"]) -> Float[Tensor, "batch dim"]:
-                pts_cl = pts.clone().requires_grad_()
-                return torch.autograd.grad(log_density(pts_cl).sum(), pts_cl)[0]
-            return grad_log_p_
+            return torch.func.grad(lambda p: log_density(p).sum())
         else:
             return torch.vmap(torch.func.grad(log_density))
     else:

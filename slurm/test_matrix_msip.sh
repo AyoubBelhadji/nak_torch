@@ -5,7 +5,7 @@ GRAD_ALDI_LR=1e-2
 N_STEPS=500
 DIM=2
 PROBLEM=joker
-ALGORITHMS=svgd,msip_fredholm,grad_aldi,cbs,msip_gradientfree
+ALGORITHMS=msip_fredholm,msip_gradientfree
 N_ITER=100
 N_PARTICLES=10,20,40,80,160,320,640
 INNER_QUAD=gauss_MC
@@ -13,6 +13,7 @@ INNER_QUAD_N_QUAD=5
 INVERSE_TEMP=0.9 # For CBS
 TEST_KERNEL=sqexp
 TEST_KERNEL_LENGTH_SCALE=1.5
+KERNEL_LENGTH_SCALE=0.1
 GRADIENT_DECAY=0.9
 KERNEL_DIAG_INFL=1e-7
 BOUNDS="(-10;10)"
@@ -28,6 +29,6 @@ source ../.venv/bin/activate
     test_kernel=$TEST_KERNEL test_kernel_length_scale=$TEST_KERNEL_LENGTH_SCALE\
     gradient_decay=$GRADIENT_DECAY kernel_diag_infl=$KERNEL_DIAG_INFL          \
     bounds=$BOUNDS grad_aldi_lr=$GRAD_ALDI_LR inner_quad=$INNER_QUAD           \
-    inner_quad_N_quad=$INNER_QUAD_N_QUAD
+    inner_quad_N_quad=$INNER_QUAD_N_QUAD kernel_length_scale=$KERNEL_LENGTH_SCALE
 
 cd $curr_dir
