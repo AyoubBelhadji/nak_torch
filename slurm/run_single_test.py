@@ -235,6 +235,7 @@ class TestOutput:
     cov: Float[ArrayLike, "dim dim"]
     rmse: float | None
     foerstner: float | None
+    spectral: float | None
     sample_sq_mmd: float | None
 
 
@@ -249,7 +250,7 @@ def get_stein_mat_fcn(log_dens: BatchLogDensity, kernel_elem: KernelFunction):
 def get_moments(
     pts: BatchPtType, wts: Optional[BatchType],
     reference_samples: Optional[BatchPtType]
-) -> tuple[MeanType, CovType, Optional[float], Optional[float]]:
+) -> tuple[MeanType, CovType, Optional[float], Optional[float], Optional[float]]:
     if wts is None:
         p_mean = pts.mean(0)
         p_cov = pts.T.cov()
@@ -257,7 +258,7 @@ def get_moments(
         p_mean = wts @ pts
         p_cov = torch.einsum("b,bi,bj", wts, pts, pts)
     if reference_samples is None:
-        rmse, foerstner = None, None
+        rmse, foerstner, spectral = None, None, None
     else:
         ref_mean = reference_samples.mean(0)
         ref_cov = reference_samples.T.cov()
@@ -267,9 +268,11 @@ def get_moments(
             ref_cov_inv_sqrt @ p_cov @ ref_cov_inv_sqrt
         )
         foerstner = gen_eigvals.log_().square_().sum().sqrt().item()
+        spectral = torch.linalg.norm(ref_cov - p_cov, ord=2).item()
+
     p_mean = p_mean.cpu().numpy()
     p_cov = p_cov.cpu().numpy()
-    return p_mean, p_cov, rmse, foerstner
+    return p_mean, p_cov, rmse, foerstner, spectral
 
 
 def get_ksd(
@@ -306,7 +309,6 @@ def get_mmd(
         test_kernel_length_scale, ref_samples,
         chunk_size, kernel_mat, N_ref, N_chunks
     )
-    K_out = torch.empty(pts.shape[0])
     cross_mmd = torch.zeros(())
     for chunk_idx in range(N_chunks):
         min_idx = chunk_idx * chunk_size
@@ -314,10 +316,10 @@ def get_mmd(
         samples_chunk = ref_samples[min_idx:max_idx]
         K_mat = kernel_mat(pts, test_kernel_length_scale, samples_chunk)
         if wts is None:
-            cross_mmd += K_out.mean()
+            cross_mmd += K_mat.mean()
         else:
-            K_out = torch.mean(K_mat, dim=1, out=K_out)
-            cross_mmd += wts @ K_out
+            K_o = torch.mean(K_mat, dim=1)
+            cross_mmd += wts @ K_o
     pts_mmd: Float
     if wts is None:
         pts_mmd = kernel_mat(pts, test_kernel_length_scale).mean()
@@ -363,13 +365,13 @@ def process_output(
 ):
     ksd = get_ksd(log_dens, pts, wts, kernel_elem, test_kernel_length_scale)
     mmd = get_mmd(pts, wts, kernel_elem, test_kernel_length_scale, ref_samples)
-    mean, cov, rmse, foerstner = get_moments(pts, wts, ref_samples)
+    mean, cov, rmse, foerstner, spectral = get_moments(pts, wts, ref_samples)
     pts_np = pts.cpu().numpy()
     if wts is not None:
         wts_np = wts.cpu().numpy()
     else:
         wts_np = None
-    return TestOutput(pts_np, wts_np, ksd, mean, cov, rmse, foerstner, mmd)
+    return TestOutput(pts_np, wts_np, ksd, mean, cov, rmse, foerstner, spectral, mmd)
 
 
 all_kernels = nak_torch.tools.kernel.kernel_elem_dict
