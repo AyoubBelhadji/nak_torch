@@ -83,6 +83,12 @@ if __name__ == '__main__':
         action='store_true'
     )
 
+    parser.add_argument(
+        '-F', '--fail',
+        help='Accept failure',
+        action='store_true'
+    )
+
     args, parameters = parser.parse_known_args()
     print(parameters)
     if args.gpu:
@@ -110,4 +116,7 @@ if __name__ == '__main__':
             try:
                 run_single_test.run_single_test(trial, data_dir, args.verbose)
             except Exception:
-                warnings.warn(f"Had problem with trial {trial}. Continuing...")
+                if args.fail:
+                    raise
+                else:
+                    warnings.warn(f"Had problem with trial {trial}. Continuing...")
