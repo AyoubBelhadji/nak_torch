@@ -48,7 +48,7 @@ def build_eks_step(eks_model: GaussianModel, dt: float, device: Optional[torch.d
         cov_forecast.mul_(dt)
         sqrt_prior_cov = sym_sqrtm(cov_forecast)
         sqrt_prior_cov.mul_(sqrt_2)
-        if isinstance(prior_precision, float):
+        if isinstance(prior_precision, float) or prior_precision.numel() == 1:
             prior_term_premul = cov_forecast.mul_(prior_precision)
         elif isinstance(prior_precision, Tensor):
             prior_term_premul = torch.matmul(cov_forecast, prior_precision)
