@@ -32,7 +32,7 @@ def build_eks_step(eks_model: GaussianModel, dt: float, device: Optional[torch.d
         prior_ens_diff = particles - particle_mean
         cov_forecast = (prior_ens_diff.T @ prior_ens_diff) / N_batch
 
-        if isinstance(likelihood_precision, float):
+        if isinstance(likelihood_precision, float) or likelihood_precision.numel() == 1:
             likely_term = torch.einsum(
                 "ko,jo,kd->jd",
                 forecast_diff, obs_diff, particles
