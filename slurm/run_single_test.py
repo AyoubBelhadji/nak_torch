@@ -195,7 +195,6 @@ def run_config(config: TestConfiguration, verbose: bool) -> tuple[problems.Probl
     seed = config.run_seed
     if seed is None:
         raise ValueError("Invalid seed.")
-    torch.set_default_device(config.device)
     rng = torch.Generator(config.device)
     rng = rng.manual_seed(seed)
     init_particles = problem.prior_sample(rng, config.n_particles)

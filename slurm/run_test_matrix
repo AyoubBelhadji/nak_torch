@@ -3,6 +3,7 @@ import os
 import copy
 import datetime
 import argparse
+import warnings
 import torch
 torch.set_default_dtype(torch.float64)
 
@@ -29,7 +30,10 @@ def get_numeric(s: str) -> int | float | str:
 def arg_matrix(args: list[str]):
     matrix = []
     for arg in args:
-        key, vals_str = arg.split('=')
+        try:
+            key, vals_str = arg.split('=')
+        except ValueError:
+            raise ValueError(f"Problem splitting arg {arg}")
         vals_list = [get_numeric(v) for v in vals_str.split(',')]
         # Take care of base case
         if len(matrix) == 0:
@@ -73,8 +77,16 @@ if __name__ == '__main__':
         action='store_true'
     )
 
+    parser.add_argument(
+        '-G', '--gpu',
+        help="Use (CUDA) GPU",
+        action='store_true'
+    )
+
     args, parameters = parser.parse_known_args()
     print(parameters)
+    if args.gpu:
+        torch.set_default_device("cuda")
     # Repeat each trial N times
     matrix = arg_matrix(parameters)
     trials: list[dict[str, int | float | str]] = []
