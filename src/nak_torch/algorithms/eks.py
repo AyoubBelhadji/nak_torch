@@ -55,7 +55,7 @@ def build_eks_step(eks_model: GaussianModel, dt: float, device: Optional[torch.d
         else:
             raise ValueError()
 
-        prior_term_premul.add_(torch.eye(dim))
+        prior_term_premul.add_(torch.eye(dim,device=device))
         new_particles = torch.linalg.solve(
             prior_term_premul, particles - likely_term, left=False)
         return new_particles, sqrt_prior_cov
