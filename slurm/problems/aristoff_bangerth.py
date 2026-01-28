@@ -29,4 +29,4 @@ def build(
     return GaussianModel(forward_model, 1 / sig_lik_sq, 1 / sig_pr_sq, z_hat, prior_mean = 0., is_vectorized=True)
 
 def prior_sample(rng: torch.Generator, N_batch: int):
-    return torch.normal(0., 2., size=(N_batch, 64), generator=rng)
+    return torch.normal(0., 2., size=(N_batch, 64), generator=rng, device=rng.device)
