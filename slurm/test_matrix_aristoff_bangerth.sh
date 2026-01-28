@@ -1,5 +1,9 @@
 #!/bin/sh
 
+#SBATCH -p mit_normal_gpu
+#SBATCH -c 32
+#SBATCH -G 1
+
 LR=0.5
 GRAD_ALDI_LR=1e-2
 GRADFREE_ALDI_LR=1e-2
@@ -24,7 +28,7 @@ my_dir=$(dirname -- "$( readlink -f -- "$0"; )")
 cd $my_dir
 source ../.venv/bin/activate
 
-./run_test_matrix $PROBLEM -n=$N_ITER -v lr=$LR n_steps=$N_STEPS dim=$DIM        \
+./run_test_matrix $PROBLEM -n=$N_ITER -G lr=$LR n_steps=$N_STEPS dim=$DIM        \
     algorithm=$ALGORITHMS n_particles=$N_PARTICLES inverse_temp=$INVERSE_TEMP    \
     test_kernel=$TEST_KERNEL test_kernel_length_scale=$TEST_KERNEL_LENGTH_SCALE  \
     gradient_decay=$GRADIENT_DECAY kernel_diag_infl=$KERNEL_DIAG_INFL            \
