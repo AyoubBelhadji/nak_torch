@@ -31,7 +31,7 @@ class TestConfiguration:
     dim: int
     n_steps: int
     kernel_length_scale: Optional[float] = None
-    device: Optional[str] = None
+    device: str | None | torch.device = None
     kernel_diag_infl: Optional[float] = None
     inner_quad: Optional[str] = None
     inner_quad_kwargs: dict[str, Any] = field(default_factory=lambda: {})
@@ -195,7 +195,8 @@ def run_config(config: TestConfiguration, verbose: bool) -> tuple[problems.Probl
     seed = config.run_seed
     if seed is None:
         raise ValueError("Invalid seed.")
-    rng = torch.Generator()
+    rng = torch.Generator(torch.get_default_device())
+    config.device = torch.get_default_device()
     rng = rng.manual_seed(seed)
     init_particles = problem.prior_sample(rng, config.n_particles)
     if isinstance(model, GaussianModel):
