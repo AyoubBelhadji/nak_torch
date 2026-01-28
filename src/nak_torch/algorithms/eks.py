@@ -99,7 +99,7 @@ def eks(
     else:
         trajectories = torch.empty(())
 
-    eks_step = build_eks_step(eks_model, lr)
+    eks_step = build_eks_step(eks_model, lr, device)
     noise_tens = torch.empty_like(particles)
     for idx in tqdm(range(n_steps), disable=not verbose):
         forecast_obs = eks_model.forward_model(particles)

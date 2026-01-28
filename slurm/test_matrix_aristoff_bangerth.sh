@@ -21,6 +21,7 @@ TEST_KERNEL_LENGTH_SCALE=64.0
 GRADIENT_DECAY=0.9
 KERNEL_DIAG_INFL=1e-5
 BOUNDS="(-10;10)"
+DEVICE=cuda
 
 curr_dir=$(pwd)
 my_dir=$(dirname -- "$( readlink -f -- "$0"; )")
@@ -33,6 +34,6 @@ source ../.venv/bin/activate
     test_kernel=$TEST_KERNEL test_kernel_length_scale=$TEST_KERNEL_LENGTH_SCALE  \
     gradient_decay=$GRADIENT_DECAY kernel_diag_infl=$KERNEL_DIAG_INFL            \
     bounds=$BOUNDS grad_aldi_lr=$GRAD_ALDI_LR gradfree_aldi_lr=$GRADFREE_ALDI_LR \
-    inner_quad=$INNER_QUAD inner_quad_N_spherical=$INNER_QUAD_N_SPHERICAL
+    inner_quad=$INNER_QUAD inner_quad_N_spherical=$INNER_QUAD_N_SPHERICAL device=$DEVICE
 
 cd $curr_dir
