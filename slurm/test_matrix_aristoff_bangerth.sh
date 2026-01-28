@@ -1,21 +1,21 @@
 #!/bin/sh
 
-LR=0.1
+LR=0.5
 GRAD_ALDI_LR=1e-2
 GRADFREE_ALDI_LR=1e-2
-N_STEPS=10
+N_STEPS=100
 DIM=64
 PROBLEM=aristoff_bangerth
-ALGORITHMS=gradfree_aldi
-N_ITER=1
-N_PARTICLES=100
-INNER_QUAD=gauss_MC
-INNER_QUAD_N_QUAD=5
+ALGORITHMS=msip_fredholm,msip_gradfree,grad_aldi,gradfree_aldi,eks,svgd
+N_ITER=10
+N_PARTICLES=10,20,40,80,160
+INNER_QUAD=spherical_MC_radial_Laguerre
+INNER_QUAD_N_SPHERICAL=5
 INVERSE_TEMP=0.9 # For CBS
 TEST_KERNEL=sqexp
-TEST_KERNEL_LENGTH_SCALE=1.5
+TEST_KERNEL_LENGTH_SCALE=64.0
 GRADIENT_DECAY=0.9
-KERNEL_DIAG_INFL=1e-7
+KERNEL_DIAG_INFL=1e-5
 BOUNDS="(-10;10)"
 
 curr_dir=$(pwd)
@@ -29,6 +29,6 @@ source ../.venv/bin/activate
     test_kernel=$TEST_KERNEL test_kernel_length_scale=$TEST_KERNEL_LENGTH_SCALE  \
     gradient_decay=$GRADIENT_DECAY kernel_diag_infl=$KERNEL_DIAG_INFL            \
     bounds=$BOUNDS grad_aldi_lr=$GRAD_ALDI_LR gradfree_aldi_lr=$GRADFREE_ALDI_LR \
-    inner_quad=$INNER_QUAD inner_quad_N_quad=$INNER_QUAD_N_QUAD
+    inner_quad=$INNER_QUAD inner_quad_N_spherical=$INNER_QUAD_N_SPHERICAL
 
 cd $curr_dir
