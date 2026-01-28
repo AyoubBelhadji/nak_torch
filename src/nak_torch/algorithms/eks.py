@@ -9,15 +9,15 @@ import numpy as np
 from nak_torch.tools.util import sym_sqrtm, initialize_particles
 
 
-def build_eks_step(eks_model: GaussianModel, dt: float):
-    likelihood_precision = eks_model.likelihood_precision
-    prior_precision = eks_model.prior_precision
-    true_obs = eks_model.true_obs
+def build_eks_step(eks_model: GaussianModel, dt: float, device: Optional[torch.device]):
+    likelihood_precision = torch.as_tensor(eks_model.likelihood_precision, device=device)
+    prior_precision = torch.as_tensor(eks_model.prior_precision, device=device)
+    true_obs = torch.as_tensor(eks_model.true_obs, device=device)
     if isinstance(true_obs, Tensor):
         true_obs.reshape(1, -1)
 
     sqrt_2 = torch.sqrt(
-        torch.tensor(2, dtype=true_obs.dtype, device=true_obs.device)
+        torch.tensor(2, dtype=true_obs.dtype, device=device)
     )
 
     def eks_step(
@@ -88,7 +88,8 @@ def eks(
         rng.manual_seed(seed)
 
     particles = initialize_particles(
-        n_particles, dim, init_particles, device, bounds, rng)
+        n_particles, dim, init_particles, device, bounds, rng
+    )
 
     if keep_all:
         trajectories = torch.empty(
