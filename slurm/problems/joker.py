@@ -2,7 +2,7 @@ import torch
 from torch import Tensor
 from dataclasses import dataclass
 from functools import partial
-from typing import Callable, Any
+from typing import Callable, Any, Optional
 
 __any__ = ['logpdf', 'sample']
 
@@ -31,7 +31,28 @@ class JokerData:
     face_inv_scale = torch.linalg.inv(torch.tensor([
         [0.197907, 0.000539511],
         [0.000539511, 0.0911001]
-    ]))
+    ]).contiguous())
+    def to(self, dtype: Optional[torch.dtype] = None, device: Optional[torch.device] = None):
+        new = JokerData()
+        new.right_eye_shift = self.right_eye_shift.to(dtype=dtype, device=device).contiguous()
+        new.left_eye_shift = self.left_eye_shift.to(dtype=dtype, device=device).contiguous()
+        new.right_eye_inv_stds = self.right_eye_inv_stds.to(dtype=dtype, device=device).contiguous()
+        new.left_eye_inv_stds = self.left_eye_inv_stds.to(dtype=dtype, device=device).contiguous()
+        new.smile_inv_stds = self.smile_inv_stds.to(dtype=dtype, device=device).contiguous()
+        new.smile_shift = self.smile_shift.to(dtype=dtype, device=device).contiguous()
+        new.face_shift = self.face_shift.to(dtype=dtype, device=device).contiguous()
+        new.face_inv_scale = self.face_inv_scale.to(dtype=dtype, device=device).contiguous()
+        return new
+    def __repr__(self) -> str:
+        return f"""{self.right_eye_shift}
+{self.left_eye_shift}\n
+{self.right_eye_inv_stds}\n
+{self.left_eye_inv_stds}\n
+{self.smile_inv_stds}\n
+{self.smile_shift}\n
+{self.face_shift}\n
+{self.face_inv_scale}\n
+"""
 
 
 def joker_logpdf_full(data: JokerData, x):
@@ -48,14 +69,14 @@ def joker_logpdf_full(data: JokerData, x):
     return torch.nan_to_num(mix_logpdf, nan=-1000)
 
 
-def sample_eye(std, shift, sample):
-    return sample @ std + shift
+def sample_eye(std: torch.Tensor, shift: torch.Tensor, sample: torch.Tensor):
+    return sample @ std.to(sample.dtype) + shift.to(sample.dtype)
 
 
-def sample_mouth(std, shift, samples):
-    z = samples
+def sample_mouth(std: torch.Tensor, shift: torch.Tensor, sample: torch.Tensor):
+    z = sample
     x_norm = torch.column_stack((z[..., 0], z[..., 1] + z[..., 0]**2))
-    x = x_norm @ std + shift
+    x = x_norm @ std.to(sample.dtype) + shift.to(sample.dtype)
     return x
 
 
@@ -69,13 +90,13 @@ def JokerSampler(data: JokerData) -> Callable[[Any, int], Any]:
     mouth = partial(sample_mouth, smile_std, data.smile_shift)
 
     def sampler(rng: torch.Generator, N_samples: int) -> Tensor:
-        z_samples = torch.normal(0., 1., size=(N_samples, 2), generator=rng)
-        which_modes_float = 3 * torch.rand(N_samples, generator=rng)
+        z_samples = torch.normal(0., 1., size=(N_samples, 2), generator=rng, device=rng.device)
+        which_modes_float = 3 * torch.rand(N_samples, generator=rng, device=rng.device)
         which_modes = torch.floor(which_modes_float).int()
         mode_0 = left_eye(z_samples[which_modes == 0])
         mode_1 = right_eye(z_samples[which_modes == 1])
         mode_2 = mouth(z_samples[which_modes == 2])
-        return torch.concat((mode_0, mode_1, mode_2)) @ face_scale + data.face_shift
+        return torch.concat((mode_0, mode_1, mode_2)) @ face_scale.to(z_samples.dtype) + data.face_shift.to(z_samples.dtype)
 
     return sampler
 
@@ -83,7 +104,7 @@ def JokerSampler(data: JokerData) -> Callable[[Any, int], Any]:
 logpdf: Callable[[Tensor], Tensor] = partial(joker_logpdf_full, JokerData())
 sample: Callable[[torch.Generator, int], Tensor] = JokerSampler(JokerData())
 def prior_sample(rng: torch.Generator, N_samples: int):
-    return torch.normal(0., 2., size=(N_samples, 2), generator=rng)
+    return torch.normal(0., 2., size=(N_samples, 2), generator=rng, device=rng.device)
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt

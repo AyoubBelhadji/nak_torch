@@ -25,7 +25,8 @@ def cbs_step(
     drift_term = particles_diff.neg_()
     noise_sqrt_cov = sym_sqrtm(particles_cov.mul_(motion_scaling_sq))
     motion_term = torch.normal(
-        0., 1., particles.shape, generator=rng) @ noise_sqrt_cov
+        0., 1., particles.shape, generator=rng, device=rng.device
+    ) @ noise_sqrt_cov
     return drift_term, motion_term
 
 

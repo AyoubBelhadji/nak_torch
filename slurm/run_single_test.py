@@ -46,7 +46,7 @@ class TestConfiguration:
 alg_dict = nak_torch.algorithms.__dict__
 inner_quad_dict = nak_torch.tools.quadrature.__dict__
 msip_estimators = ["fredholm", "gradientfree", "gradientinformed"]
-problem_dict: dict[str, Callable[[], problems.Problem]] = problems.__dict__
+problem_dict: dict[str, Callable[[int], problems.Problem]] = problems.__dict__
 uses_gaussian_model = ["gradfree_aldi", "eks"]
 
 
@@ -144,6 +144,13 @@ def get_bounds(bounds_str: Optional[str]) -> Optional[tuple[float, float]]:
 def configuration_factory(config_dict: dict) -> TestConfiguration:
     alg_kwargs = {}
     alg_specific = {}
+    device_name = config_dict.get("device", None)
+    if device_name is None or device_name == "":
+        device_name = "cpu"
+    device = torch.device(device_name)
+    torch.set_default_device(device)
+    if device_name == 'mps':
+        torch.set_default_dtype(torch.float32)
     alg_name = config_dict.get("algorithm", None)
     if alg_name is None:
         raise ValueError("Expected field `algorithm`")
@@ -187,7 +194,8 @@ def run_config(config: TestConfiguration, verbose: bool) -> tuple[problems.Probl
     if alg_name.startswith('msip'):
         alg_name = 'msip'
     alg = alg_dict[alg_name]
-    problem = problem_dict[config.problem + "_logpdf"]()
+    dim = config.dim
+    problem = problem_dict[config.problem + "_logpdf"](dim)
     model = problem.model
     if not isinstance(model, GaussianModel) and alg_name in uses_gaussian_model:
         raise ValueError(
@@ -288,68 +296,54 @@ def get_ksd(
         ksd = torch.sqrt((stein_mat_eval @ wts) @ wts)
     return ksd.item()
 
-
+@torch.compile
 def get_mmd(
     pts: BatchPtType,
     wts: Optional[BatchType],
     kernel_elem: KernelFunction,
     test_kernel_length_scale: float,
     ref_samples: Optional[BatchPtType],
-    chunk_size: int = 512
 ) -> Optional[float]:
     kernel_mat = nak_torch.tools.kernel.matricize_kernel_elem(kernel_elem)
     if ref_samples is None:
         return None
-    N_ref = ref_samples.shape[0]
-    N_chunks = (N_ref + chunk_size - 1) // chunk_size
-    ref_mmd = get_self_mmd(
-        test_kernel_length_scale, ref_samples,
-        chunk_size, kernel_mat, N_ref, N_chunks
-    )
-    cross_mmd = torch.zeros(())
-    for chunk_idx in range(N_chunks):
-        min_idx = chunk_idx * chunk_size
-        max_idx = min((chunk_idx + 1)*chunk_size, N_ref)
-        samples_chunk = ref_samples[min_idx:max_idx]
-        K_mat = kernel_mat(pts, test_kernel_length_scale, samples_chunk)
-        if wts is None:
-            cross_mmd += K_mat.mean()
-        else:
-            K_o = torch.mean(K_mat, dim=1)
-            cross_mmd += wts @ K_o
+    ref_mmd = kernel_mat(ref_samples, test_kernel_length_scale).mean()
+    cross_mmd_vec = kernel_mat(pts, test_kernel_length_scale, ref_samples).mean(1)
+    cross_mmd: Float
     pts_mmd: Float
     if wts is None:
+        cross_mmd = cross_mmd_vec.mean()
         pts_mmd = kernel_mat(pts, test_kernel_length_scale).mean()
     else:
+        cross_mmd = wts @ cross_mmd_vec
         K_mat = kernel_mat(pts, test_kernel_length_scale)
         pts_mmd = (K_mat @ wts) @ wts
     return (ref_mmd - 2*cross_mmd + pts_mmd).item()
 
 
-def get_self_mmd(
-    test_kernel_length_scale: float,
-    ref_samples: BatchPtType, chunk_size: int,
-    kernel_mat: MatSelfKernelFunction, N_ref: int,
-    N_chunks: int
-) -> Float:
-    @torch.compile
-    def self_mmd_chunk(i: int, j: int):
-        min_idx_i, max_idx_i = i*chunk_size, min((i + 1)*chunk_size, N_ref)
-        min_idx_j, max_idx_j = i*chunk_size, min((i + 1)*chunk_size, N_ref)
-        samples_chunk_i = ref_samples[min_idx_i:max_idx_i]
-        samples_chunk_j = ref_samples[min_idx_j:max_idx_j]
-        K_mat = kernel_mat(
-            samples_chunk_i, test_kernel_length_scale, samples_chunk_j)
-        mul = 1 if i == j else 2
-        return mul * K_mat.mean()
+# def get_self_mmd(
+#     test_kernel_length_scale: float,
+#     ref_samples: BatchPtType, chunk_size: int,
+#     kernel_mat: MatSelfKernelFunction, N_ref: int,
+#     N_chunks: int
+# ) -> Float:
+#     @torch.compile
+#     def self_mmd_chunk(i: int, j: int):
+#         min_idx_i, max_idx_i = i*chunk_size, min((i + 1)*chunk_size, N_ref)
+#         min_idx_j, max_idx_j = j*chunk_size, min((j + 1)*chunk_size, N_ref)
+#         samples_chunk_i = ref_samples[min_idx_i:max_idx_i]
+#         samples_chunk_j = ref_samples[min_idx_j:max_idx_j]
+#         K_mat =
+#         mul = 1 if i == j else 2
+#         return mul * K_mat.mean()
 
-    self_mmd = torch.zeros(())
-    # prog = tqdm(range( (N_chunks * (N_chunks + 1)) // 2 ))
-    for i in range(N_chunks):
-        for j in range(i, N_chunks):
-            self_mmd += self_mmd_chunk(i, j)
-            # prog.update()
-    return self_mmd
+#     # prog = tqdm(range( (N_chunks * (N_chunks + 1)) // 2 ))
+#     self_mmd = torch.zeros((), device=ref_samples.device, dtype=ref_samples.dtype)
+#     for i in range(N_chunks):
+#         for j in range(i, N_chunks):
+#             self_mmd += self_mmd_chunk(i, j)
+#             # prog.update()
+#     return self_mmd
 
 
 def process_output(
