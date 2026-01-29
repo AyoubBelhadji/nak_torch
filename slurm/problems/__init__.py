@@ -5,7 +5,8 @@ from functools import partial
 import torch
 from nak_torch.tools import GaussianModel
 from nak_torch.tools.types import BatchPtType, BatchLogDensity, PtType
-from . import joker, aristoff_bangerth, kfrflow_examples
+from nak_torch.functions import joker
+from . import aristoff_bangerth, kfrflow_examples
 
 __all__ = [
     "aristoff_bangerth_logpdf",
