@@ -8,7 +8,7 @@
 # 05/12/2025
 
 from .eks import eks
-from .msip import msip, msip_ni, msip_greedy, msip_geom_greedy
+from .msip import msip, msip_ni, msip_greedy, msip_geom_greedy, msip_adapt
 from .svgd import svgd
 from .grad_aldi import grad_aldi
 from .gradfree_aldi import gradfree_aldi
@@ -21,6 +21,7 @@ __all__ = [
     "msip_ni",
     "msip_greedy",
     "msip_geom_greedy",
+    "msip_adapt",
     "svgd",
     "grad_aldi",
     "gradfree_aldi",

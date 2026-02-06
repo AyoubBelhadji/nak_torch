@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-
-# This file contains the implementation of mean shift interacting particles
-# Ayoub Belhadji
-# 05/12/2025
-
 import warnings
 from typing import Optional
 
@@ -14,12 +6,12 @@ import numpy as np
 import torch
 
 from nak_torch.tools.kernel import default_kernel_matrix
-from nak_torch.tools.util import initialize_particles, get_keywords
+from nak_torch.tools.util import initialize_particles, get_keywords, quantile_distance
 from .msip_map import MSIPEstimatorOutput, msip_map, get_msip_wts
 from .estimators import MSIPEstimator, MSIPFredholm
 
 from nak_torch.tools.types import LogDensity, BatchLogDensity, \
-    BatchLogDensityGradVal, BatchPtType, BatchType, MatSelfKernelFunction
+    BatchLogDensityGradVal, BatchType, MatSelfKernelFunction
 
 
 def process_msip_density(
@@ -63,6 +55,7 @@ def msip(
     get_kernel_matrix: Optional[MatSelfKernelFunction] = None,
     kernel_diag_infl: float = 0.0,
     verbose: bool = False,
+    use_quantile_length_scale: Optional[float] = None,
     **msip_kwargs
 ):
     r"""
@@ -104,6 +97,9 @@ def msip(
     msip_estimator_out: MSIPEstimatorOutput
     particle_wts: BatchType
     for idx in tqdm(range(n_steps + 1), disable=not verbose):
+        if use_quantile_length_scale is not None:
+            kernel_length_scale = quantile_distance(particles, use_quantile_length_scale)
+
         kernel_matrix = get_kernel_matrix(particles, kernel_length_scale)
         kernel_matrix[
             torch.arange(n_particles), torch.arange(n_particles)

@@ -53,3 +53,13 @@ def batched_grad_log_density_factory(
             return torch.vmap(torch.func.grad(log_density))
     else:
         return grad_log_density
+
+
+@torch.compile
+def quantile_distance(pts: BatchPtType, quantile: float = 0.5) -> Float:
+    """ If quantile < 0, get minimum. If quantile > 1, get maximum"""
+    assert pts.ndim == 2
+    diffs = torch.sum(torch.square(pts.unsqueeze(0) - pts.unsqueeze(1)), -1).sqrt_()
+    diffs_idxs = torch.triu_indices(pts.shape[0], pts.shape[0], offset=1, device=pts.device)
+    diffs_list = diffs[diffs_idxs[0],diffs_idxs[1]]
+    return torch.quantile(diffs_list, quantile)
