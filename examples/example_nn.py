@@ -4,7 +4,7 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from nak_torch.tools import animate_trajectories_box
+from .viz_tools import animate_trajectories_box
 from nak_torch.functions import loss_nn_dataset,plot_2D_classification_with_dataset_from_theta
 from nak_torch.algorithms import msip_greedy
 
