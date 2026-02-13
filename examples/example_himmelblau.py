@@ -8,7 +8,7 @@ from nak_torch.tools.quadrature import spherical_MC_radial_Laguerre
 from datetime import datetime
 import matplotlib.pyplot as plt
 
-# save_gif = True
+save_gif = False
 algorithm_name = "msip_ni"
 function_name = "himmelblau"
 log_density = himmelblau(50.0)
