@@ -4,7 +4,8 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [
-    { name = "Daniel Sharp", email = "dannys4@mit.edu" }
+    { name = "Daniel Sharp", email = "dannys4@mit.edu" },
+    { name = "Ayoub Belhadji", email = "abelhadj@mit.edu" }
 ]
 requires-python = ">=3.12"
 dependencies = [
