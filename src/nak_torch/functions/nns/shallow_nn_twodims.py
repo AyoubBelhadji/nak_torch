@@ -10,8 +10,6 @@
 
 import torch
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 import torch.nn.functional as F
 from torch import nn
 import random
@@ -82,7 +80,7 @@ def loss_nn_dataset(dataset_name, beta = 1.0, lambda2=0.01, device="cpu"):
         # assign parameters (no grad tracking for the assignment)
         #print(theta_1d.shape)
         with torch.no_grad():
-            
+
             vector_to_parameters(theta_1d, model.parameters())
 
         # forward on the dataset
@@ -118,54 +116,6 @@ def loss_nn_dataset(dataset_name, beta = 1.0, lambda2=0.01, device="cpu"):
             raise ValueError(f"theta must be 1D or 2D, got shape {theta.shape}")
 
     return objective_function
-
-
-
-
-
-def plot_2D_classification_with_dataset_from_theta(theta,dataset_name, bounds, M_res, device="cpu"):
-    
-    a = bounds[0]
-    b = bounds[1]
-    M = M_res
-    data = np.load(f"datasets/{dataset_name}.npz")
-    x_train = torch.from_numpy(data["X"])
-    y_train = torch.from_numpy(data["Y"]).view(-1)
-
-    model = sigma_pi(2, 1, 10, 1, 'ReLU').to(device)
-    vector_to_parameters(torch.from_numpy(theta), model.parameters())
-    
-    
-    
-    #funct = function_list[0]
-    # Generate x and y values
-    x = np.linspace(a, b, M)
-    y = np.linspace(a, b, M)
-    X, Y = np.meshgrid(x, y)  # Create a grid of x and y values
-
-    # Calculate corresponding z values using the function
-    Z = np.zeros((M,M))
-    for m_1 in range(M):
-        #print(m_1)
-        for m_2 in range(M):
-            z = torch.from_numpy(np.array((X[m_1,m_2],Y[m_1,m_2]))).float()
-            z = torch.sign(model.forward(z)[0])
-
-            Z[m_1,m_2] = z
-
-    plt.figure(figsize=(10, 8))
-
-    plt.imshow(Z, extent=[a, b, a, b], origin='lower')
-    #plt.show()
-    plt.colorbar(label='Z')
-    plt.plot( x_train[0,y_train.flatten()>0], x_train[1,y_train.flatten()>0], 'b.' )
-    plt.plot( x_train[0,y_train.flatten()<0], x_train[1,y_train.flatten()<0], 'r.' )
-
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    #plt.title('3D Heatmap Plot of the Three-Dimensional Function')
-    plt.show()
-    
 
 
 

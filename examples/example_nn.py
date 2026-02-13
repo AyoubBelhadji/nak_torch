@@ -3,9 +3,10 @@
 
 import torch
 import numpy as np
+from torch.nn.utils import vector_to_parameters
 import matplotlib.pyplot as plt
-from .viz_tools import animate_trajectories_box
-from nak_torch.functions import loss_nn_dataset,plot_2D_classification_with_dataset_from_theta
+from viz_tools import animate_trajectories_box
+from nak_torch.functions import loss_nn_dataset
 from nak_torch.algorithms import msip_greedy
 
 from datetime import datetime
@@ -40,6 +41,49 @@ def plot_eval_best_tensor(the_eval_tensor):
 
 def plot_2D_classification_tensor(the_trajectories,dataset_name,m,t):
     plot_2D_classification_with_dataset_from_theta(the_trajectories[t,m,:],dataset_name, [-2,2], 50, device="cpu")
+
+
+def plot_2D_classification_with_dataset_from_theta(theta,dataset_name, bounds, M_res, device="cpu"):
+    a = bounds[0]
+    b = bounds[1]
+    M = M_res
+    data = np.load(f"datasets/{dataset_name}.npz")
+    x_train = torch.from_numpy(data["X"])
+    y_train = torch.from_numpy(data["Y"]).view(-1)
+
+    model = sigma_pi(2, 1, 10, 1, 'ReLU').to(device)
+    vector_to_parameters(torch.from_numpy(theta), model.parameters())
+
+
+
+    #funct = function_list[0]
+    # Generate x and y values
+    x = np.linspace(a, b, M)
+    y = np.linspace(a, b, M)
+    X, Y = np.meshgrid(x, y)  # Create a grid of x and y values
+
+    # Calculate corresponding z values using the function
+    Z = np.zeros((M,M))
+    for m_1 in range(M):
+        #print(m_1)
+        for m_2 in range(M):
+            z = torch.from_numpy(np.array((X[m_1,m_2],Y[m_1,m_2]))).float()
+            z = torch.sign(model.forward(z)[0])
+
+            Z[m_1,m_2] = z
+
+    plt.figure(figsize=(10, 8))
+
+    plt.imshow(Z, extent=[a, b, a, b], origin='lower')
+    #plt.show()
+    plt.colorbar(label='Z')
+    plt.plot( x_train[0,y_train.flatten()>0], x_train[1,y_train.flatten()>0], 'b.' )
+    plt.plot( x_train[0,y_train.flatten()<0], x_train[1,y_train.flatten()<0], 'r.' )
+
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    #plt.title('3D Heatmap Plot of the Three-Dimensional Function')
+    plt.show()
 
 
 
