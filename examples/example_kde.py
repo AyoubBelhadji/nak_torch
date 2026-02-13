@@ -2,7 +2,7 @@
 
 import numpy as np
 from viz_tools import animate_trajectories_box
-from nak_torch.functions import gaussian_kde
+from functions import gaussian_kde
 from nak_torch.algorithms import msip_greedy
 from datetime import datetime
 

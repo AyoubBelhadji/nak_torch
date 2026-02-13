@@ -1,7 +1,7 @@
 # %%
 import math
 import torch
-from nak_torch.functions import aristoff_bangerth as ab, build_aristoff_bangerth
+from functions import aristoff_bangerth as ab, build_aristoff_bangerth
 from nak_torch.algorithms import msip, svgd
 from matplotlib import ticker
 import gc

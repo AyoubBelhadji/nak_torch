@@ -1,7 +1,7 @@
 # %%
 import torch
 from viz_tools import animate_trajectories_box
-from nak_torch.functions import himmelblau
+from functions import himmelblau
 from nak_torch.algorithms import msip, svgd
 from nak_torch.algorithms.msip import MSIPFredholm, MSIPQuadGradientFree
 from nak_torch.tools.quadrature import spherical_MC_radial_Laguerre

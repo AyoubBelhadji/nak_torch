@@ -1,10 +1,9 @@
-from . import algorithms, functions, tools
+from . import algorithms, tools
 from .tools import GaussianModel
 
 
 __all__ = [
     "algorithms",
-    "functions",
     "tools",
     "GaussianModel"
 ]

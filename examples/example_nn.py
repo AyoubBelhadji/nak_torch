@@ -6,7 +6,7 @@ import numpy as np
 from torch.nn.utils import vector_to_parameters
 import matplotlib.pyplot as plt
 from viz_tools import animate_trajectories_box
-from nak_torch.functions import loss_nn_dataset
+from functions import loss_nn_dataset
 from nak_torch.algorithms import msip_greedy
 
 from datetime import datetime
