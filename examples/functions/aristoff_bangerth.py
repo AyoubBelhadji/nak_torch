@@ -1,3 +1,16 @@
+# -----------------------------------------------------------------------------
+#
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (C) 2019 by Wolfgang Bangerth
+#
+# This file is redistributed code with changes from the deal.II code gallery.
+#
+# -----------------------------------------------------------------------------
+#
+# Author: Wolfgang Bangerth, Colorado State University, 2019.
+# Author: NAK torch authors, 2026
+#
+
 import torch
 from torch import Tensor
 from typing import Optional
