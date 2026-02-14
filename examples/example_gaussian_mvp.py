@@ -13,6 +13,9 @@ from nak_torch.algorithms import grad_aldi, eks, gradfree_aldi, cbs, msip, kfrfl
 from nak_torch.algorithms.msip import MSIPFredholm, MSIPQuadGradientInformed, MSIPQuadGradientFree
 from nak_torch.tools.quadrature import spherical_MC_radial_Laguerre
 
+from nak_torch.tools.kernel import sqexp_kernel_elem as kernel_elem, sqexp_kernel_matrix
+from tqdm import tqdm
+
 if torch.cuda.is_available():
     torch.set_default_device("cuda")
 else:
@@ -48,7 +51,7 @@ def weighted_cov(pts: Tensor, wts: Tensor):
     return second_moment - mean.outer(mean)
 
 
-# %%
+# %% Everything related to the definition of the distribution
 torch.manual_seed(1023921)
 obs_op = torch.randn(2, 5)
 obs_op.div_(obs_op.norm(dim=1, keepdim=True))
@@ -96,32 +99,37 @@ vals, vecs = torch.linalg.eigh(cov_post)
 cov_post_sqrt = vecs @ torch.diag(torch.sqrt(vals)) @ vecs.T
 samps = torch.randn(10000, 2) @ cov_post_sqrt + mean_post
 
-# %%
-n_steps, n_particles = 1000, 500
+# %% Parameters that are common to all algorithms
+
+
+n_steps, n_particles = 50000, 50
 lr = 0.1
+
+# %% Initialization
+
 init_particles = torch.randn((n_particles, 2)) / \
-    model.prior_precision + model.prior_mean
+    model.prior_precision + + torch.tensor([3.2,-5.0])
 
-
-# %%
+# init_particles = torch.randn((n_particles, 2)) + torch.tensor([3, -3])
+#torch.randn((n_particles_kfr,2)) + torch.tensor([3,-5])
+# %% EKS
 trajectories_eks = eks(
     model, n_particles=n_particles,
     n_steps=n_steps, dim=2, lr=lr,
     init_particles=init_particles, keep_all=False,
 )
 
-# %%
-# init_particles = torch.randn((n_particles, 2)) + torch.tensor([3, -3])
+# %% KFR
+
 # delta_ts = torch.ones(1000)/1000
-n_particles_kfr = 100
-init_kfr = init_particles[:n_particles_kfr] #torch.randn((n_particles_kfr,2)) + torch.tensor([3,-5])
-def imq(pt1,pt2,h):
-    return 1/torch.sqrt(1 + (torch.linalg.norm(pt1-pt2) / h)**2)
+#def imq(pt1,pt2,h):
+#    return 1/torch.sqrt(1 + (torch.linalg.norm(pt1-pt2) / h)**2)
+
 trajectories_kfr = kfrflow(
     like_log_dens,
-    n_particles_kfr,
-    10000, 2,
-    init_particles=init_kfr,
+    n_particles,
+    n_steps, 2,
+    init_particles=init_particles,
     kernel_length_scale = 1e-2,
     kernel_diag_infl=1e-5,
     # bounds=(-10,10),
@@ -130,61 +138,62 @@ trajectories_kfr = kfrflow(
 )
 
 # %%
-from nak_torch.tools.kernel import sqexp_kernel_elem as kernel_elem, sqexp_kernel_matrix
-from tqdm import tqdm
-kernel_vec = torch.vmap(kernel_elem, in_dims=(None,0,None))
-jac_kernel_vec = torch.vmap(torch.func.grad(kernel_elem), in_dims = (None, 0, None))
-kernel_mat = sqexp_kernel_matrix
-n_steps_kfr = 100
-delta_t = 1 / n_steps_kfr
-particles = init_particles.clone()
-kernel_length_scale = 1e-2
-grad_ks = torch.empty((n_particles, n_particles, 2))
-M_t = torch.empty((n_particles, n_particles))
-for n in tqdm(range(n_steps_kfr)):
-    log_likely_evals = like_log_dens(particles)
-    M_t.zero_()
-    for i in range(n_particles):
-        grad_K = jac_kernel_vec(particles[i], particles, kernel_length_scale)
-        grad_ks[i].copy_(grad_K)
-        M_t.add_(grad_K @ grad_K.T)
-    M_t = M_t.div_(n_particles)
-    M_t[torch.arange(n_particles), torch.arange(n_particles)] += 1e-4
-    wts_shift = log_likely_evals.mean()
-    wts = log_likely_evals.sub_(wts_shift).div_(n_particles)
-    K_mat = kernel_mat(particles, kernel_length_scale)
-    kernelized_wts = K_mat @ wts
-    particles += torch.einsum("jid,i->jd", grad_ks, torch.linalg.solve(M_t, kernelized_wts)).mul_(delta_t)
+
+# kernel_vec = torch.vmap(kernel_elem, in_dims=(None,0,None))
+# jac_kernel_vec = torch.vmap(torch.func.grad(kernel_elem), in_dims = (None, 0, None))
+# kernel_mat = sqexp_kernel_matrix
+# n_steps_kfr = 100
+# delta_t = 1 / n_steps_kfr
+# particles_kfr = init_particles.clone()
+# kernel_length_scale = 1e-2
+# grad_ks = torch.empty((n_particles, n_particles, 2))
+# M_t = torch.empty((n_particles, n_particles))
+# for n in tqdm(range(n_steps_kfr)):
+#     log_likely_evals = like_log_dens(particles)
+#     M_t.zero_()
+#     for i in range(n_particles):
+#         grad_K = jac_kernel_vec(particles[i], particles, kernel_length_scale)
+#         grad_ks[i].copy_(grad_K)
+#         M_t.add_(grad_K @ grad_K.T)
+#     M_t = M_t.div_(n_particles)
+#     M_t[torch.arange(n_particles), torch.arange(n_particles)] += 1e-4
+#     wts_shift = log_likely_evals.mean()
+#     wts = log_likely_evals.sub_(wts_shift).div_(n_particles)
+#     K_mat = kernel_mat(particles, kernel_length_scale)
+#     kernelized_wts = K_mat @ wts
+#     particles_kfr += torch.einsum("jid,i->jd", grad_ks, torch.linalg.solve(M_t, kernelized_wts)).mul_(delta_t)
 
 
-# %%
+# %% GI-ALDI
+
 trajectories_galdi = grad_aldi(
     post_log_dens, n_particles, n_steps, dim=2,
     lr=lr, init_particles=init_particles,
     keep_all=False
 )
 
-# %%
+# %% GF-ALDI
+
 trajectories_gfaldi = gradfree_aldi(
     model, n_particles, n_steps, dim=2,
     lr=lr, init_particles=init_particles,
     keep_all=True
 )
 
-# %%
+# %% CBS
+
 trajectories_cbs = cbs(
     post_log_dens, n_particles, n_steps, inverse_temp=0.95, dim=2,
     lr=lr, init_particles=init_particles,
     keep_all=True
 )
 
-# %%
-kernel_length_scale = 0.25
+# %% F-MSIP
+
+kernel_length_scale = 0.03
 bounds = (-100., 100.)
 gradient_decay = 1.0
-n_particles_msip = 5
-n_steps_msip = 1000
-lr_msip = 1e-2
+lr_msip = 100e-2
 kernel_diag_infl = 1e-8
 msip_fredholm = MSIPFredholm(
     gradient_decay,
@@ -192,8 +201,8 @@ msip_fredholm = MSIPFredholm(
 )
 
 trajectories_msip, traj_wts_msip = msip(
-    msip_fredholm, n_particles_msip, n_steps_msip, dim=2,
-    lr=lr_msip, init_particles=init_particles[:n_particles_msip],
+    msip_fredholm, n_particles, n_steps, dim=2,
+    lr=lr_msip, init_particles=init_particles[:n_particles],
     kernel_length_scale=kernel_length_scale,
     is_log_density_batched=True,
     kernel_diag_infl=kernel_diag_infl,
@@ -226,8 +235,8 @@ msip_quadgrad = MSIPQuadGradientInformed(
 )
 
 trajectories_msip_qg, traj_wts_msip_qg = msip(
-    msip_quadgrad, n_particles_msip, 100, dim=2,
-    lr=10., init_particles=init_particles[:n_particles_msip],
+    msip_quadgrad, n_particles, n_steps, dim=2,
+    lr=10., init_particles=init_particles[:n_particles],
     kernel_length_scale=kernel_length_scale,
     # is_log_density_batched=True,
     kernel_diag_infl=1e-8,
@@ -244,8 +253,8 @@ msip_quadgf = MSIPQuadGradientFree(
 )
 
 trajectories_msip_qgf, traj_wts_msip_qgf = msip(
-    msip_quadgf, n_particles_msip, 500, dim=2,
-    lr=1., init_particles=init_particles[:n_particles_msip],
+    msip_quadgf, n_particles, n_steps, dim=2,
+    lr=1., init_particles=init_particles[:n_particles],
     kernel_length_scale=kernel_length_scale,
     kernel_diag_infl=1e-8,
     bounds=(-1000., 1000.),
@@ -255,7 +264,7 @@ trajectories_msip_qgf, traj_wts_msip_qgf = msip(
 
 # %%
 pts_eks = trajectories_eks[-1]
-pts_kfr = particles
+#pts_kfr = particles_kfr
 pts_galdi = trajectories_galdi[-1]
 pts_gfaldi = trajectories_gfaldi[-1]
 pts_cbs = trajectories_cbs[-1]
@@ -278,25 +287,92 @@ ygrid = 3 * ygrid * cov_post_sqrt[1, 1] + mean_post[1]
 X, Y = torch.meshgrid(xgrid, ygrid, indexing="ij")
 grid_pts = torch.stack((X.flatten(), Y.flatten()), 1)
 
+# fig, ax = plt.subplots()
+# ax.contour(X, Y, post_log_dens(grid_pts).reshape(Ngrid, Ngrid), levels=10)
+# # ax.scatter(samps[:, 0], samps[:, 1], alpha=0.025, label="Truth")
+# # ax.scatter(pts_galdi[:, 0], pts_galdi[:, 1], alpha=0.2, label="Grad-ALDI")
+# # ax.scatter(pts_gfaldi[:, 0], pts_gfaldi[:, 1],
+# #            alpha=0.2, label="GradFree-ALDI")
+# ax.scatter(pts_kfr[:,0], pts_kfr[:,1], label="KFR")
+# # ax.scatter(pts_eks[:, 0], pts_eks[:, 1], alpha=0.1, label="EKS")
+# # ax.scatter(pts_cbs[:, 0], pts_cbs[:, 1], alpha=0.1, label="CBS")
+# # s = ax.scatter(pts_msip[:, 0], pts_msip[:, 1],
+#             #    c=wts_msip, alpha=0.15, label="MSIP")
+# # s = ax.scatter(pts_msip_qg[:, 0], pts_msip_qg[:, 1],
+# #                c = wts_msip_qg, alpha=0.15, label="MSIP-QuadGrad")
+# # s = ax.scatter(pts_msip_qgf[:, 0], pts_msip_qgf[:, 1],
+# #                c = wts_msip_qgf, alpha=0.15, label="MSIP-QuadGradFree")
+# # plt.colorbar(s)
+# ax.set_aspect(1.0)
+# ax.legend()
+# plt.show()
+
+
+# fig, ax = plt.subplots()
+# ax.contour(X, Y, post_log_dens(grid_pts).reshape(Ngrid, Ngrid), levels=10)
+# # ax.scatter(samps[:, 0], samps[:, 1], alpha=0.025, label="Truth")
+# # ax.scatter(pts_galdi[:, 0], pts_galdi[:, 1], alpha=0.2, label="Grad-ALDI")
+# # ax.scatter(pts_gfaldi[:, 0], pts_gfaldi[:, 1],
+# #            alpha=0.2, label="GradFree-ALDI")
+# #ax.scatter(pts_kfr[:,0], pts_kfr[:,1], label="KFR")
+# # ax.scatter(pts_eks[:, 0], pts_eks[:, 1], alpha=0.1, label="EKS")
+# # ax.scatter(pts_cbs[:, 0], pts_cbs[:, 1], alpha=0.1, label="CBS")
+# # s = ax.scatter(pts_msip[:, 0], pts_msip[:, 1],
+#             #    c=wts_msip, alpha=0.15, label="MSIP")
+# s = ax.scatter(pts_msip_qg[:, 0], pts_msip_qg[:, 1],
+#                 c = wts_msip_qg, alpha=0.15, label="MSIP-QuadGrad")
+# # s = ax.scatter(pts_msip_qgf[:, 0], pts_msip_qgf[:, 1],
+# #                c = wts_msip_qgf, alpha=0.15, label="MSIP-QuadGradFree")
+# # plt.colorbar(s)
+# ax.set_aspect(1.0)
+# ax.legend()
+# plt.show()
+
+
+
 fig, ax = plt.subplots()
 ax.contour(X, Y, post_log_dens(grid_pts).reshape(Ngrid, Ngrid), levels=10)
 # ax.scatter(samps[:, 0], samps[:, 1], alpha=0.025, label="Truth")
 # ax.scatter(pts_galdi[:, 0], pts_galdi[:, 1], alpha=0.2, label="Grad-ALDI")
 # ax.scatter(pts_gfaldi[:, 0], pts_gfaldi[:, 1],
 #            alpha=0.2, label="GradFree-ALDI")
-ax.scatter(pts_kfr[:,0], pts_kfr[:,1], label="KFR")
+#ax.scatter(pts_kfr[:,0], pts_kfr[:,1], label="KFR")
 # ax.scatter(pts_eks[:, 0], pts_eks[:, 1], alpha=0.1, label="EKS")
 # ax.scatter(pts_cbs[:, 0], pts_cbs[:, 1], alpha=0.1, label="CBS")
-# s = ax.scatter(pts_msip[:, 0], pts_msip[:, 1],
-            #    c=wts_msip, alpha=0.15, label="MSIP")
-# s = ax.scatter(pts_msip_qg[:, 0], pts_msip_qg[:, 1],
+s = ax.scatter(pts_msip[:, 0], pts_msip[:, 1],
+                c=wts_msip, alpha=0.15, label="MSIP")
+#s = ax.scatter(pts_msip_qg[:, 0], pts_msip_qg[:, 1],
 #                c = wts_msip_qg, alpha=0.15, label="MSIP-QuadGrad")
-# s = ax.scatter(pts_msip_qgf[:, 0], pts_msip_qgf[:, 1],
+#s = ax.scatter(pts_msip_qgf[:, 0], pts_msip_qgf[:, 1],
 #                c = wts_msip_qgf, alpha=0.15, label="MSIP-QuadGradFree")
 # plt.colorbar(s)
 ax.set_aspect(1.0)
 ax.legend()
 plt.show()
+
+
+
+fig, ax = plt.subplots()
+ax.contour(X, Y, post_log_dens(grid_pts).reshape(Ngrid, Ngrid), levels=10)
+# ax.scatter(samps[:, 0], samps[:, 1], alpha=0.025, label="Truth")
+ax.scatter(pts_galdi[:, 0], pts_galdi[:, 1], alpha=0.2, label="Grad-ALDI")
+# ax.scatter(pts_gfaldi[:, 0], pts_gfaldi[:, 1],
+#            alpha=0.2, label="GradFree-ALDI")
+#ax.scatter(pts_kfr[:,0], pts_kfr[:,1], label="KFR")
+# ax.scatter(pts_eks[:, 0], pts_eks[:, 1], alpha=0.1, label="EKS")
+# ax.scatter(pts_cbs[:, 0], pts_cbs[:, 1], alpha=0.1, label="CBS")
+#s = ax.scatter(pts_msip[:, 0], pts_msip[:, 1],
+#                c=wts_msip, alpha=0.15, label="MSIP")
+#s = ax.scatter(pts_msip_qg[:, 0], pts_msip_qg[:, 1],
+#                c = wts_msip_qg, alpha=0.15, label="MSIP-QuadGrad")
+#s = ax.scatter(pts_msip_qgf[:, 0], pts_msip_qgf[:, 1],
+#                c = wts_msip_qgf, alpha=0.15, label="MSIP-QuadGradFree")
+# plt.colorbar(s)
+ax.set_aspect(1.0)
+ax.legend()
+plt.show()
+
+
 
 # %%
 print(f"""
