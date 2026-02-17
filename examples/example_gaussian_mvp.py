@@ -4,7 +4,6 @@ from functools import partial
 from jaxtyping import Float
 import matplotlib.pyplot as plt
 import torch
-torch._dynamo.config.suppress_errors = True
 
 from torch import Tensor
 
