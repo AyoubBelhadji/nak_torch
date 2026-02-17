@@ -100,15 +100,13 @@ cov_post_sqrt = vecs @ torch.diag(torch.sqrt(vals)) @ vecs.T
 samps = torch.randn(10000, 2) @ cov_post_sqrt + mean_post
 
 # %% Parameters that are common to all algorithms
-
-
 n_steps, n_particles = 50000, 50
 lr = 0.1
 
 # %% Initialization
 
 init_particles = torch.randn((n_particles, 2)) / \
-    model.prior_precision + + torch.tensor([3.2,-5.0])
+    model.prior_precision + torch.tensor([3.2,-5.0])
 
 # init_particles = torch.randn((n_particles, 2)) + torch.tensor([3, -3])
 #torch.randn((n_particles_kfr,2)) + torch.tensor([3,-5])
@@ -116,7 +114,9 @@ init_particles = torch.randn((n_particles, 2)) / \
 trajectories_eks = eks(
     model, n_particles=n_particles,
     n_steps=n_steps, dim=2, lr=lr,
-    init_particles=init_particles, keep_all=False,
+    init_particles=init_particles,
+    keep_all=False, compile_step=False,
+    verbose=True
 )
 
 # %% KFR
@@ -134,34 +134,10 @@ trajectories_kfr = kfrflow(
     kernel_diag_infl=1e-5,
     # bounds=(-10,10),
     # kernel_elem=imq,
-    keep_all=False
+    keep_all=False,
+    compile_step=False,
+    verbose = True
 )
-
-# %%
-
-# kernel_vec = torch.vmap(kernel_elem, in_dims=(None,0,None))
-# jac_kernel_vec = torch.vmap(torch.func.grad(kernel_elem), in_dims = (None, 0, None))
-# kernel_mat = sqexp_kernel_matrix
-# n_steps_kfr = 100
-# delta_t = 1 / n_steps_kfr
-# particles_kfr = init_particles.clone()
-# kernel_length_scale = 1e-2
-# grad_ks = torch.empty((n_particles, n_particles, 2))
-# M_t = torch.empty((n_particles, n_particles))
-# for n in tqdm(range(n_steps_kfr)):
-#     log_likely_evals = like_log_dens(particles)
-#     M_t.zero_()
-#     for i in range(n_particles):
-#         grad_K = jac_kernel_vec(particles[i], particles, kernel_length_scale)
-#         grad_ks[i].copy_(grad_K)
-#         M_t.add_(grad_K @ grad_K.T)
-#     M_t = M_t.div_(n_particles)
-#     M_t[torch.arange(n_particles), torch.arange(n_particles)] += 1e-4
-#     wts_shift = log_likely_evals.mean()
-#     wts = log_likely_evals.sub_(wts_shift).div_(n_particles)
-#     K_mat = kernel_mat(particles, kernel_length_scale)
-#     kernelized_wts = K_mat @ wts
-#     particles_kfr += torch.einsum("jid,i->jd", grad_ks, torch.linalg.solve(M_t, kernelized_wts)).mul_(delta_t)
 
 
 # %% GI-ALDI
@@ -169,7 +145,8 @@ trajectories_kfr = kfrflow(
 trajectories_galdi = grad_aldi(
     post_log_dens, n_particles, n_steps, dim=2,
     lr=lr, init_particles=init_particles,
-    keep_all=False
+    keep_all=False, compile_step=False,
+    verbose=True,
 )
 
 # %% GF-ALDI
@@ -177,7 +154,8 @@ trajectories_galdi = grad_aldi(
 trajectories_gfaldi = gradfree_aldi(
     model, n_particles, n_steps, dim=2,
     lr=lr, init_particles=init_particles,
-    keep_all=True
+    keep_all=True, compile_step=False,
+    verbose=True
 )
 
 # %% CBS
@@ -185,7 +163,8 @@ trajectories_gfaldi = gradfree_aldi(
 trajectories_cbs = cbs(
     post_log_dens, n_particles, n_steps, inverse_temp=0.95, dim=2,
     lr=lr, init_particles=init_particles,
-    keep_all=True
+    keep_all=True, compile_step=False,
+    verbose=True
 )
 
 # %% F-MSIP
@@ -208,7 +187,9 @@ trajectories_msip, traj_wts_msip = msip(
     kernel_diag_infl=kernel_diag_infl,
     bounds=bounds,
     gradient_decay=gradient_decay,
-    keep_all=True
+    keep_all=True,
+    compile_step=False,
+    verbose=True
 )
 
 # %%
@@ -242,7 +223,9 @@ trajectories_msip_qg, traj_wts_msip_qg = msip(
     kernel_diag_infl=1e-8,
     bounds=(-1000, 1000),
     # gradient_decay=gradient_decay,
-    keep_all=False
+    keep_all=False,
+    compile_step=False,
+    verbose=True
 )
 
 # %%
@@ -258,7 +241,8 @@ trajectories_msip_qgf, traj_wts_msip_qgf = msip(
     kernel_length_scale=kernel_length_scale,
     kernel_diag_infl=1e-8,
     bounds=(-1000., 1000.),
-    keep_all=False
+    keep_all=False, compile_step=False,
+    verbose=True
 )
 
 

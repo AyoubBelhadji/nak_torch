@@ -28,7 +28,6 @@ calculate_msip_map_all = torch.vmap(
     calculate_msip_map, in_dims=(0,None,None,None)
 )
 
-@torch.compile
 def get_msip_wts(
     particles: BatchPtType,
     msip_estimators: MSIPEstimatorOutput,

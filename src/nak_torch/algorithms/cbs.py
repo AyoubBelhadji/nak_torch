@@ -6,8 +6,6 @@ from tqdm import tqdm
 import numpy as np
 from nak_torch.tools.util import initialize_particles, sym_sqrtm
 
-
-@torch.compile
 def cbs_step(
     particles: BatchPtType,
     log_dens: BatchType,
@@ -45,6 +43,7 @@ def cbs(
     keep_all: bool = True,
     is_log_density_batched: bool = False,
     verbose: bool = False,
+    compile_step: bool = True,
     **unused_kwargs
 ):
     if verbose and len(unused_kwargs) > 0:
@@ -65,6 +64,9 @@ def cbs(
         trajectories[0].copy_(particles)
     else:
         trajectories = torch.empty(())
+    _cbs_step = cbs_step
+    if compile_step:
+        _cbs_step = torch.compile(cbs_step)
 
     log_p = log_density if is_log_density_batched else torch.vmap(log_density)
     motion_scaling_sq = lr * 2 * (1 + inverse_temp)
@@ -72,7 +74,7 @@ def cbs(
     for idx in tqdm(range(n_steps), disable=not verbose):
         log_dens_eval = log_p(particles)
         with torch.no_grad():
-            particles_diff, particles_noise = cbs_step(
+            particles_diff, particles_noise = _cbs_step(
                 particles, log_dens_eval, inverse_temp, motion_scaling_sq, rng
             )
             particles_diff.mul_(lr)

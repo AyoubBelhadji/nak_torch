@@ -9,7 +9,7 @@ import numpy as np
 from nak_torch.tools.util import initialize_particles, sym_sqrtm
 
 
-def build_gradfree_aldi_step(model: GaussianModel, rng: torch.Generator):
+def build_gradfree_aldi_step(model: GaussianModel, rng: torch.Generator, compile_step: bool):
     prior_mean = model.prior_mean
     likelihood_precision = model.likelihood_precision
     prior_precision = model.prior_precision
@@ -57,7 +57,7 @@ def build_gradfree_aldi_step(model: GaussianModel, rng: torch.Generator):
 
         return particle_diff, motion
 
-    return torch.compile(gradfree_aldi_step)
+    return torch.compile(gradfree_aldi_step) if compile_step else gradfree_aldi_step
 
 
 def gradfree_aldi(
@@ -73,6 +73,7 @@ def gradfree_aldi(
     rng: Optional[torch.Generator] = None,
     keep_all: bool = True,
     verbose: bool = False,
+    compile_step: bool = True,
     **unused_kwargs
 ):
     if verbose and len(unused_kwargs) > 0:
@@ -92,7 +93,7 @@ def gradfree_aldi(
         trajectories[0].copy_(particles)
     else:
         trajectories = torch.empty(())
-    gradfree_aldi_step = build_gradfree_aldi_step(model, rng)
+    gradfree_aldi_step = build_gradfree_aldi_step(model, rng, compile_step)
     sqrt_lr = torch.sqrt(torch.tensor(lr))
 
     for idx in tqdm(range(n_steps), disable=not verbose):

@@ -8,7 +8,6 @@ from tqdm import tqdm
 import numpy as np
 from nak_torch.tools.util import batched_grad_log_density_factory, initialize_particles, sym_sqrtm
 
-@torch.compile
 def grad_aldi_step(
     particles: BatchPtType,
     grad_log_dens: BatchPtType,
@@ -49,6 +48,7 @@ def grad_aldi(
     is_log_density_batched: bool = False,
     grad_log_density: Optional[BatchGradLogDensity] = None,
     verbose: bool = False,
+    compile_step: bool = True,
     **unused_kwargs
 ):
     if verbose and len(unused_kwargs) > 0:
@@ -71,11 +71,14 @@ def grad_aldi(
         trajectories = torch.empty(())
 
     sqrt_lr = torch.sqrt(torch.tensor(lr))
+    g_aldi_step = grad_aldi_step
+    if compile_step:
+        g_aldi_step = torch.compile(g_aldi_step)
 
     for idx in tqdm(range(n_steps), disable=not verbose):
         grad_log_dens_eval = grad_log_p(particles)
         with torch.no_grad():
-            particles_diff, particles_noise = grad_aldi_step(particles, grad_log_dens_eval, rng)
+            particles_diff, particles_noise = g_aldi_step(particles, grad_log_dens_eval, rng)
             particles_diff.mul_(lr)
             particles_noise.mul_(sqrt_lr)
             particles.add_(particles_diff).add_(particles_noise)

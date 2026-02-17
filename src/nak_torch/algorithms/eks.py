@@ -9,7 +9,7 @@ import numpy as np
 from nak_torch.tools.util import sym_sqrtm, initialize_particles
 
 
-def build_eks_step(eks_model: GaussianModel, dt: float, device: Optional[torch.device]):
+def build_eks_step(eks_model: GaussianModel, dt: float, device: Optional[torch.device], compile_step: bool):
     likelihood_precision = torch.as_tensor(eks_model.likelihood_precision, device=device)
     prior_precision = torch.as_tensor(eks_model.prior_precision, device=device)
     true_obs = torch.as_tensor(eks_model.true_obs, device=device)
@@ -60,7 +60,7 @@ def build_eks_step(eks_model: GaussianModel, dt: float, device: Optional[torch.d
             prior_term_premul, particles - likely_term, left=False)
         return new_particles, sqrt_prior_cov
 
-    return torch.compile(eks_step)
+    return torch.compile(eks_step) if compile_step else eks_step
 
 
 def eks(
@@ -77,6 +77,7 @@ def eks(
     keep_all: bool = True,
     rng: Optional[torch.Generator] = None,
     verbose: bool = False,
+    compile_step: bool = True,
     **unused_kwargs
 ):
     if verbose and len(unused_kwargs) > 0:
@@ -99,7 +100,7 @@ def eks(
     else:
         trajectories = torch.empty(())
 
-    eks_step = build_eks_step(eks_model, lr, device)
+    eks_step = build_eks_step(eks_model, lr, device, compile_step)
     noise_tens = torch.empty_like(particles)
     for idx in tqdm(range(n_steps), disable=not verbose):
         forecast_obs = eks_model.forward_model(particles)

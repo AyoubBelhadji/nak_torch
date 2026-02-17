@@ -2,7 +2,6 @@ import torch
 from torch import Tensor
 from jaxtyping import Float
 
-@torch.compile
 def recursive_weighted_average_alpha_v(
         y: Float[Tensor, "batch dim"],
         alpha: Float[Tensor, " batch"],

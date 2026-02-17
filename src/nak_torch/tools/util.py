@@ -55,7 +55,6 @@ def batched_grad_log_density_factory(
         return grad_log_density
 
 
-@torch.compile
 def quantile_distance(pts: BatchPtType, quantile: float = 0.5) -> Float:
     """ If quantile < 0, get minimum. If quantile > 1, get maximum"""
     assert pts.ndim == 2

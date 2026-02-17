@@ -17,7 +17,6 @@ from torch import Tensor
 from nak_torch.tools.types import BatchLogDensity, BatchType, KernelFunction, KernelMatrixType, LogDensity
 from nak_torch.tools.util import initialize_particles
 
-@torch.compile
 def kfr_step(
         kernel_matrix: KernelMatrixType,
         grad1_kernel_tens: Float[Tensor, "batch batch dim"],
@@ -83,6 +82,8 @@ def kfrflow(
     bounds: Optional[tuple[float, float]] = None,
     keep_all: bool = True,
     is_log_density_batched: bool = False,
+    verbose: bool = False,
+    compile_step: bool = True,
     **unused_kwargs
 ):
     if lr is not None:
@@ -93,6 +94,9 @@ def kfrflow(
 
     if seed is not None:
         torch.manual_seed(seed)
+    kfr_step_ = kfr_step
+    if compile_step:
+        kfr_step_ = torch.compile(kfr_step)
 
     particles = initialize_particles(
         n_particles, dim, init_particles, device, bounds
@@ -122,13 +126,11 @@ def kfrflow(
 
     kernel_fcn = kfr_kernel_tens_factory(kernel_elem)
 
-    #for idx in tqdm(range(n_steps), disable=not verbose):
-    # We need to fix this: verbose is not defined
-    for idx in tqdm(range(n_steps), disable= False):
+    for idx in tqdm(range(n_steps), disable = not verbose):
         delta_t = delta_ts[idx]
         grad1_kernel_tens, kernel_mat = kernel_fcn(particles, particles, kernel_length_scale)
         log_likely_eval = log_like(particles)
-        particles_diff = kfr_step(
+        particles_diff = kfr_step_(
             kernel_mat, grad1_kernel_tens,
             log_likely_eval, kernel_diag_infl,
             delta_t

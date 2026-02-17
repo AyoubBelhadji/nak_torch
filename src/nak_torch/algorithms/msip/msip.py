@@ -56,6 +56,7 @@ def msip(
     kernel_diag_infl: float = 0.0,
     verbose: bool = False,
     use_quantile_length_scale: Optional[float] = None,
+    compile_step: bool = True,
     **msip_kwargs
 ):
     r"""
@@ -78,6 +79,14 @@ def msip(
         get_kernel_matrix = default_kernel_matrix
 
     msip_estimator = process_msip_density(log_density, **msip_kwargs)
+    est_v = msip_estimator.get_v_evals
+    _msip_map = msip_map
+    _get_msip_wts = get_msip_wts
+    if compile_step:
+        _msip_map = torch.compile(msip_map)
+        _get_msip_wts = torch.compile(_get_msip_wts)
+        est_v = torch.compile(est_v)
+
     particles = initialize_particles(
         n_particles, dim, init_particles, device, bounds
     )
@@ -105,10 +114,10 @@ def msip(
             torch.arange(n_particles), torch.arange(n_particles)
         ] += kernel_diag_infl
 
-        msip_estimator_out = msip_estimator.get_v_evals(
+        msip_estimator_out = est_v(
             particles, kernel_length_scale
         )
-        particle_wts = get_msip_wts(
+        particle_wts = _get_msip_wts(
             particles, msip_estimator_out,
             kernel_matrix
         )
@@ -119,7 +128,7 @@ def msip(
             else:
                 kernel_matrix_inverse = torch.linalg.pinv(kernel_matrix)
 
-            particles_diff = msip_map(
+            particles_diff = _msip_map(
                 msip_estimator_out,
                 particles,
                 kernel_matrix_inverse,
