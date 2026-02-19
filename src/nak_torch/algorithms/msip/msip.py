@@ -139,9 +139,9 @@ def msip(
                 particles = (1.0 - lr) * particles + lr * particles_diff
                 if bounds is not None:
                     particles.clamp_(bounds[0], bounds[1])
-            if keep_all:
-                trajectories[idx+1].copy_(particles)
-                traj_wts[idx].copy_(particle_wts)
+        if keep_all:
+            trajectories[idx+1].copy_(particles)
+            traj_wts[idx].copy_(particle_wts)
 
     if not keep_all:
         trajectories = particles.unsqueeze_(0)
