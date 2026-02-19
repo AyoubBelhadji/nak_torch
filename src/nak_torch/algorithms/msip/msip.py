@@ -122,6 +122,9 @@ def msip(
             kernel_matrix
         )
 
+        if keep_all:
+            traj_wts[idx].copy_(particle_wts)
+
         if idx < n_steps:
             if kernel_diag_infl > 0:
                 kernel_matrix_inverse = torch.linalg.inv(kernel_matrix)
@@ -139,9 +142,8 @@ def msip(
                 particles = (1.0 - lr) * particles + lr * particles_diff
                 if bounds is not None:
                     particles.clamp_(bounds[0], bounds[1])
-        if keep_all:
-            trajectories[idx+1].copy_(particles)
-            traj_wts[idx].copy_(particle_wts)
+            if keep_all:
+                trajectories[idx+1].copy_(particles)
 
     if not keep_all:
         trajectories = particles.unsqueeze_(0)
