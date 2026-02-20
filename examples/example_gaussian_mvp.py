@@ -102,13 +102,13 @@ samps = torch.randn(10000, 2) @ cov_post_sqrt + mean_post
 # %% Parameters that are common to all algorithms
 
 
-n_steps, n_particles = 50000, 50
+n_steps, n_particles = 10000, 50
 lr = 0.1
 
 # %% Initialization
 
 init_particles = torch.randn((n_particles, 2)) / \
-    model.prior_precision + + torch.tensor([3.2,-5.0])
+    model.prior_precision + + torch.tensor([1.2,-2.0])
 
 # init_particles = torch.randn((n_particles, 2)) + torch.tensor([3, -3])
 #torch.randn((n_particles_kfr,2)) + torch.tensor([3,-5])
@@ -190,11 +190,11 @@ trajectories_cbs = cbs(
 
 # %% F-MSIP
 
-kernel_length_scale = 0.03
+kernel_length_scale = 0.06
 bounds = (-100., 100.)
-gradient_decay = 1.0
-lr_msip = 100e-2
-kernel_diag_infl = 1e-8
+gradient_decay = 0.5
+lr_msip = 20e-2
+kernel_diag_infl = 1e-6
 msip_fredholm = MSIPFredholm(
     gradient_decay,
     post_log_dens_grad_val_batch
@@ -230,35 +230,35 @@ def spherical_quad(batch_size: int, N_spherical: int = 5, N_radial: int = 3):
 # kernel_length_scale = 1e-3
 # gradient_decay = 1.
 msip_quadgrad = MSIPQuadGradientInformed(
-    post_log_dens_grad_val_batch, mc_quad_rule,
+    post_log_dens_grad_val_batch, partial(mc_quad_rule, N_quad=5),
     gradient_decay
 )
 
 trajectories_msip_qg, traj_wts_msip_qg = msip(
     msip_quadgrad, n_particles, n_steps, dim=2,
-    lr=10., init_particles=init_particles[:n_particles],
+    lr=lr_msip, init_particles=init_particles,
     kernel_length_scale=kernel_length_scale,
     # is_log_density_batched=True,
-    kernel_diag_infl=1e-8,
+    kernel_diag_infl=kernel_diag_infl,
     bounds=(-1000, 1000),
     # gradient_decay=gradient_decay,
-    keep_all=False
+    #keep_all=False
 )
 
 # %%
 # n_particles_msip = 500
 # kernel_length_scale = 1e-2
 msip_quadgf = MSIPQuadGradientFree(
-    post_log_dens_batch, partial(mc_quad_rule, N_quad=100)
+    post_log_dens_batch, partial(mc_quad_rule, N_quad=5)
 )
 
 trajectories_msip_qgf, traj_wts_msip_qgf = msip(
     msip_quadgf, n_particles, n_steps, dim=2,
-    lr=1., init_particles=init_particles[:n_particles],
+    lr=lr_msip, init_particles=init_particles,
     kernel_length_scale=kernel_length_scale,
-    kernel_diag_infl=1e-8,
+    kernel_diag_infl=kernel_diag_infl,
     bounds=(-1000., 1000.),
-    keep_all=False
+    #keep_all=False
 )
 
 
@@ -268,7 +268,7 @@ pts_eks = trajectories_eks[-1]
 pts_galdi = trajectories_galdi[-1]
 pts_gfaldi = trajectories_gfaldi[-1]
 pts_cbs = trajectories_cbs[-1]
-idx_msip = 100
+idx_msip = 9999
 pts_msip = trajectories_msip[idx_msip]
 wts_msip = traj_wts_msip[idx_msip]
 # wts_msip /= wts_msip.sum()
@@ -350,6 +350,47 @@ ax.set_aspect(1.0)
 ax.legend()
 plt.show()
 
+
+fig, ax = plt.subplots()
+ax.contour(X, Y, post_log_dens(grid_pts).reshape(Ngrid, Ngrid), levels=10)
+# ax.scatter(samps[:, 0], samps[:, 1], alpha=0.025, label="Truth")
+# ax.scatter(pts_galdi[:, 0], pts_galdi[:, 1], alpha=0.2, label="Grad-ALDI")
+# ax.scatter(pts_gfaldi[:, 0], pts_gfaldi[:, 1],
+#            alpha=0.2, label="GradFree-ALDI")
+#ax.scatter(pts_kfr[:,0], pts_kfr[:,1], label="KFR")
+# ax.scatter(pts_eks[:, 0], pts_eks[:, 1], alpha=0.1, label="EKS")
+# ax.scatter(pts_cbs[:, 0], pts_cbs[:, 1], alpha=0.1, label="CBS")
+#s = ax.scatter(pts_msip[:, 0], pts_msip[:, 1],
+#                c=wts_msip, alpha=0.15, label="MSIP")
+#s = ax.scatter(pts_msip_qg[:, 0], pts_msip_qg[:, 1],
+#                c = wts_msip_qg, alpha=0.15, label="MSIP-QuadGrad")
+s = ax.scatter(pts_msip_qgf[:, 0], pts_msip_qgf[:, 1],
+                c = wts_msip_qgf, alpha=0.15, label="MSIP-QuadGradFree")
+# plt.colorbar(s)
+ax.set_aspect(1.0)
+ax.legend()
+plt.show()
+
+
+fig, ax = plt.subplots()
+ax.contour(X, Y, post_log_dens(grid_pts).reshape(Ngrid, Ngrid), levels=10)
+# ax.scatter(samps[:, 0], samps[:, 1], alpha=0.025, label="Truth")
+# ax.scatter(pts_galdi[:, 0], pts_galdi[:, 1], alpha=0.2, label="Grad-ALDI")
+# ax.scatter(pts_gfaldi[:, 0], pts_gfaldi[:, 1],
+#            alpha=0.2, label="GradFree-ALDI")
+#ax.scatter(pts_kfr[:,0], pts_kfr[:,1], label="KFR")
+# ax.scatter(pts_eks[:, 0], pts_eks[:, 1], alpha=0.1, label="EKS")
+# ax.scatter(pts_cbs[:, 0], pts_cbs[:, 1], alpha=0.1, label="CBS")
+#s = ax.scatter(pts_msip[:, 0], pts_msip[:, 1],
+#                c=wts_msip, alpha=0.15, label="MSIP")
+s = ax.scatter(pts_msip_qg[:, 0], pts_msip_qg[:, 1],
+                c = wts_msip_qg, alpha=0.15, label="MSIP-QuadGrad")
+#s = ax.scatter(pts_msip_qgf[:, 0], pts_msip_qgf[:, 1],
+#                c = wts_msip_qgf, alpha=0.15, label="MSIP-QuadGradFree")
+# plt.colorbar(s)
+ax.set_aspect(1.0)
+ax.legend()
+plt.show()
 
 
 fig, ax = plt.subplots()
