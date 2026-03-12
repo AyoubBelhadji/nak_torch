@@ -81,7 +81,7 @@ def make_objective(X, Y, model_class='bnn',
                    hidden_dim=10, n_layers=1,
                    beta=1.0, lambda2=0.01):
     """
-    Returns a log-posterior callable  theta -> scalar  (or (N,) if batched).
+    Returns a log-posterior callable  theta -> scalar
 
     Parameters
     ----------
@@ -331,11 +331,11 @@ if __name__ == "__main__":
     # Config
     DATASET      = 'two_bananas'
     MODEL_CLASS  = 'bnn'
-    HIDDEN_DIM   = 5         
+    HIDDEN_DIM   = 50         
     N_LAYERS     = 1          
     N_TRAIN      = 0.8        # train-test split ratio
-    N_PARTICLES  = 50
-    N_STEPS      = 1000
+    N_PARTICLES  = 250
+    N_STEPS      = 5000
     BETA         = 1.0        # beta in x-> exp(-beta^{-1}V(x))
     LAMBDA2      = 0.00005        # lambda in prior;0005
                               # lambda close to 0 means weak prior
