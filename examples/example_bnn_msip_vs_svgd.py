@@ -282,12 +282,12 @@ def evaluate(trajectories_dict, objective_fns_dict, X, Y, split_name="test"):
     return results
 
 
-def plot_diversity_curve(trajectories_dict, subsample=10):
+def plot_diversity_curve(trajectories_dict):
     fig, ax = plt.subplots(figsize=(8, 4))
     for name, traj in trajectories_dict.items():
         T, N, D = traj.shape
         steps, divs = [], []
-        for t in range(0, T, subsample):
+        for t in range(0, T, N):
             P   = traj[t]
             sq  = ((P.unsqueeze(0) - P.unsqueeze(1)) ** 2).sum(-1)
             idx = torch.triu_indices(N, N, offset=1)
@@ -335,7 +335,7 @@ if __name__ == "__main__":
     N_LAYERS     = 1          
     N_TRAIN      = 0.8        # train-test split ratio
     N_PARTICLES  = 250
-    N_STEPS      = 5000
+    N_STEPS      = 1000
     BETA         = 1.0        # beta in x-> exp(-beta^{-1}V(x))
     LAMBDA2      = 0.00005        # lambda in prior;0005
                               # lambda close to 0 means weak prior
@@ -365,7 +365,7 @@ if __name__ == "__main__":
     msip_fredholm          = MSIPFredholm(1.0, post_log_dens_grad_val)
 
 
-    trajectories_msip, _ = msip(
+    trajectories_msip, wts_msip = msip(
         obj_msip, N_PARTICLES, N_STEPS, dim=dimension,
         lr=LR_MSIP, init_particles=init_particles,
         kernel_length_scale=SIGMA, is_log_density_batched=True,
