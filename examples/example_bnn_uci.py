@@ -27,6 +27,34 @@ import torch.nn.functional as F
 from torch.func import functional_call
 from collections import OrderedDict
 
+from typing import Dict, List, Tuple
+from ucimlrepo import fetch_ucirepo
+
+
+
+
+# Neural network model
+#, prior_std: float
+
+class bnn(nn.Module):
+    def __init__(self, d_in: int, hidden_dim: int):
+        super().__init__()
+        self.d_in = d_in
+        self.hidden_dim = hidden_dim
+        #self.prior_std = prior_std
+        
+        self.fc1 = nn.Linear(d_in,hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim,1)
+        #self.log_noise = nn.Parameter(torch.tensor(0.0))
+        
+        
+    def forward(self, xb: torch.Tensor) -> torch.Tensor:
+        # xb: [B, d_in]-> mu: [B]
+        h = F.relu(self.fc1(xb))
+        mu = self.fc2(h).squeeze(-1)
+        
+        return mu
+        
 
 
 class sigma_pi(nn.Module):
@@ -71,16 +99,90 @@ class sigma_pi(nn.Module):
 
 
 
-def loss_nn_dataset(dataset_name, beta=1.0, lambda2=0.01, device="cpu"):
-    # --- Load dataset once ---
-    data = np.load(f"datasets/{dataset_name}.npz")
-    X = torch.from_numpy(data["X"].T).to(device)
-    Y = torch.from_numpy(data["Y"].T).to(device)
+# Dataset loading
 
-    loss_func = F.soft_margin_loss
+def load_uci_dataset(name: str) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Load a few standard UCI regression datasets via ucimlrepo.
 
-    # --- Build model once ---
-    model = sigma_pi(2, 1, 10, 1, 'ReLU').to(device)
+    Supported names:
+        - boston
+        - concrete
+        - energy
+        - yacht
+        - wine
+    """
+
+    name = name.lower()
+    
+    if name == "boston":
+        ds = fetch_ucirepo(id=531)
+        X = ds.data.features.to_numpy(dtype=np.float64)
+        X = np.delete(X, 11, axis=1)
+        y = ds.data.targets.to_numpy(dtype=np.float64).reshape(-1)
+
+
+    if name == "concrete":
+        # Concrete Compressive Strength
+        ds = fetch_ucirepo(id=165)
+        X = ds.data.features.to_numpy(dtype=np.float64)
+        y = ds.data.targets.to_numpy(dtype=np.float64).reshape(-1)
+
+    elif name == "energy":
+        # Energy Efficiency
+        ds = fetch_ucirepo(id=242)
+        X = ds.data.features.to_numpy(dtype=np.float64)
+        y_all = ds.data.targets.to_numpy(dtype=np.float64)
+        # Use heating load as target (common choice)
+        y = y_all[:, 0].reshape(-1)
+
+    elif name == "yacht":
+        # Yacht Hydrodynamics
+        ds = fetch_ucirepo(id=243)
+        X = ds.data.features.to_numpy(dtype=np.float64)
+        y = ds.data.targets.to_numpy(dtype=np.float64).reshape(-1)
+
+    elif name == "wine":
+        # Wine Quality (red wine)
+        ds = fetch_ucirepo(id=186)
+        X = ds.data.features.to_numpy(dtype=np.float64)
+        y = ds.data.targets.to_numpy(dtype=np.float64).reshape(-1)
+
+    else:
+        raise ValueError(
+            f"Unsupported dataset '{name}'. "
+            "Use one of: boston, concrete, energy, yacht, wine."
+        )
+
+    # Remove rows with missing values if any
+    mask = np.isfinite(X).all(axis=1) & np.isfinite(y)
+    X = X[mask]
+    y = y[mask]
+
+    return torch.from_numpy(X), torch.from_numpy(y)
+
+
+
+
+def loss_nn_dataset(dataset_name, nn_params, beta=1.0, lambda2=0.01, device="cpu"):
+    
+    # Define the loss
+    #loss_func = F.soft_margin_loss
+    loss_func = F.mse_loss
+    log_prior_lambda = lambda2
+    
+    # Load dataset
+    X,Y = load_uci_dataset(dataset_name)
+    #X = (X - X.mean(0)) / X.std(0)
+    #Y = (Y - Y.mean()) / Y.std()
+    
+    d = X.shape[1]
+    N = X.shape[0]
+    nn_params['d_in']=d
+    print(d)
+    print(N)
+    # Call the neural network 
+    model = bnn(**nn_params).to(device)
 
     # Save parameter metadata for unpacking theta
     param_info = []
@@ -111,10 +213,10 @@ def loss_nn_dataset(dataset_name, beta=1.0, lambda2=0.01, device="cpu"):
         """theta_1d: (d,) -> scalar loss"""
         param_dict = theta_to_param_dict(theta_1d)
 
-        pred = functional_call(model, (param_dict, buffer_dict), (X,))
-        data_loss = loss_func(pred, Y)
-        reg = lambda2 * (theta_1d ** 2).sum()
-        return -(data_loss + reg) / beta
+        pred = functional_call(model, (param_dict, buffer_dict), (X,)).squeeze(-1)
+        data_loss = -loss_func(pred, Y)*N
+        reg = -log_prior_lambda * (theta_1d ** 2).sum()
+        return (data_loss + reg) / beta
 
     def objective_function(theta: torch.Tensor):
         """
@@ -166,55 +268,13 @@ def plot_eval_best_tensor(the_eval_tensor):
 
     plt.show()
 
-def plot_2D_classification_tensor(the_trajectories,dataset_name,m,t):
-    plot_2D_classification_with_dataset_from_theta(the_trajectories[t,m,:],dataset_name, [-2,2], 50, device="cpu")
 
 
-def plot_2D_classification_with_dataset_from_theta(theta,dataset_name, bounds, M_res, device="cpu"):
-    a = bounds[0]
-    b = bounds[1]
-    M = M_res
-    data = np.load(f"datasets/{dataset_name}.npz")
-    x_train = torch.from_numpy(data["X"]).float()
-    y_train = torch.from_numpy(data["Y"]).float().view(-1)
-
-    # model = sigma_pi(2, 1, 10, 1, 'ReLU').to(device).float()
-    # vector_to_parameters(theta, model.parameters())
-    model = sigma_pi(2, 1, 10, 1, 'ReLU').to(device).float()
-    theta_t = torch.as_tensor(theta, dtype=torch.float32, device=device)
-    vector_to_parameters(theta_t, model.parameters())
-
-
-    #funct = function_list[0]
-    # Generate x and y values
-    x = np.linspace(a, b, M)
-    y = np.linspace(a, b, M)
-    X, Y = np.meshgrid(x, y)  # Create a grid of x and y values
-
-    # Calculate corresponding z values using the function
-    Z = np.zeros((M,M))
-    for m_1 in range(M):
-        #print(m_1)
-        for m_2 in range(M):
-            z = torch.from_numpy(np.array((X[m_1,m_2],Y[m_1,m_2]))).float()
-            z = torch.sign(model.forward(z)[0])
-
-            Z[m_1,m_2] = z
-
-    plt.figure(figsize=(10, 8))
-
-    plt.imshow(Z, extent=[a, b, a, b], origin='lower')
-    #plt.show()
-    plt.colorbar(label='Z')
-    plt.plot( x_train[0,y_train.flatten()>0], x_train[1,y_train.flatten()>0], 'b.' )
-    plt.plot( x_train[0,y_train.flatten()<0], x_train[1,y_train.flatten()<0], 'r.' )
-
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    #plt.title('3D Heatmap Plot of the Three-Dimensional Function')
-    plt.show()
-
-
+def nn_param_counter(model):
+    count = 0
+    for name, p in model.named_parameters():
+        count = count + p.numel()
+    return count
 
 if __name__ == "__main__":
     save_gif = False
@@ -225,23 +285,41 @@ if __name__ == "__main__":
     #objective_function = mixture_of_gaussians
 
     function_name = "loss_nn_dataset"
-    objective_function = loss_nn_dataset('two_bananas', beta = 1.0, lambda2=0.00001, device="cpu")
+    
+    # nn_params = {
+    #     'd': 1,
+    #     'M': 2,
+    #     'N': 100,
+    #     'C': 1,
+    #     'activation': 'ReLU'
+    #     }
+    
+    nn_params = {
+        'd_in': 1,
+        'hidden_dim': 200,
+        }
+    
+    
+    dataset_name = 'concrete'
+    objective_function = loss_nn_dataset(dataset_name,nn_params, beta = 1.0, lambda2=0.0, device="cpu")
 
+    
+    
 
     #post_log_dens_batch = torch.vmap(objective_function)
     post_log_dens_grad_val = torch.func.grad_and_value(objective_function)
-
+    model = bnn(**nn_params)
     
     n_particles = 30
-    dimension = 60
-    n_steps = 2000
+    dimension = nn_param_counter(model)
+    n_steps = 1000
     
     init_particles = torch.randn((n_particles, dimension)) 
 
-    kernel_length_scale = 0.5
+    kernel_length_scale = 2.5
     bounds = (-100., 100.)
     gradient_decay = 1.0
-    lr_msip = 100e-2
+    lr_msip = 1e-3
     kernel_diag_infl = 1e-8
     msip_fredholm = MSIPFredholm(
         gradient_decay,
@@ -264,14 +342,14 @@ if __name__ == "__main__":
 
 
     eval_tensor = eval_function_trajectories(objective_function,trajectories_msip)
-    plot_eval_tensor(eval_tensor)
-    plot_eval_best_tensor(eval_tensor)
+    plot_eval_tensor(torch.log(eval_tensor))
+    plot_eval_best_tensor(torch.log(eval_tensor))
     T,_,_ = trajectories_msip.shape
 
     for m in range(n_particles):
         t_m = np.argmin(eval_tensor[:,m].detach().numpy())
 
-        plot_2D_classification_tensor(trajectories_msip,'two_bananas',m,t_m)
+        #plot_2D_classification_tensor(trajectories_msip,'two_bananas',m,t_m)
 
 
     if save_gif:
