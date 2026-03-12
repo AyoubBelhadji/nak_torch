@@ -24,7 +24,11 @@ def create_svgd_step(
     kernel_length_scale: float
 ) -> Callable[[BatchPtType], BatchPtType]:
     kernel_grad_val = torch.func.grad_and_value(
-        lambda x, y: kernel_elem(x, y, kernel_length_scale), argnums=1
+        # This is something to be examined carefully: do we have (previous version)
+        #lambda x, y: kernel_elem(x, y, kernel_length_scale), argnums=1
+        # or do we have (my suggestion)
+        lambda x, y: kernel_elem(x, y, kernel_length_scale), argnums=0
+        # ?
     )
     kernel_grad_val_vec = torch.vmap(
         torch.vmap(kernel_grad_val, in_dims=(None, 0)),
@@ -37,7 +41,11 @@ def create_svgd_step(
         # lpg[i,k] = grad(k) log_p(x_i)
         log_p_grad_ev = grad_log_p(points)
         term_1 = k_eval.T @ log_p_grad_ev
-        term_2 = k_grad.sum(1)
+        # This is something to be examined carefully: do we have (previous version)
+        #term_2 = k_grad.sum(1)
+        # or do we have (my suggestion)
+        term_2 = k_grad.sum(0)
+        # ?
         return (term_1 + term_2) / points.shape[0]
 
     return svgd_step_dir
@@ -81,14 +89,16 @@ def svgd(
 
     grad_log_p = batched_grad_log_density_factory(log_density, is_log_density_batched, grad_log_density)
     step_fcn = create_svgd_step(kernel_elem, grad_log_p, kernel_length_scale)
-
-    for idx in tqdm(range(n_steps), disable=not verbose):
+    
+    trajectories[0].copy_(particles)
+    
+    for idx in tqdm(range(n_steps-1), disable=not verbose):
         particles_diff = step_fcn(particles)
         with torch.no_grad():
             particles = particles + lr * particles_diff
             if bounds is not None:
                 particles.clamp_(bounds[0], bounds[1])
         if keep_all:
-            trajectories[idx].copy_(particles)
+            trajectories[idx+1].copy_(particles)
 
     return trajectories.detach() if keep_all else particles.unsqueeze_(0)
