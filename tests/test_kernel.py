@@ -1,6 +1,5 @@
 import pytest
 import torch
-import numpy as np
 from nak_torch.tools.kernel import sqexp_kernel_elem, sqexp_kernel_matrix, kernel_grad_and_value_factory
 
 FD_DELTA = 1e-7

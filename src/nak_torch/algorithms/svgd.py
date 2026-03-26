@@ -17,11 +17,11 @@ from nak_torch.tools.util import batched_grad_log_density_factory, initialize_pa
 
 
 def create_svgd_step(
-    kernel_elem: KernelFunction,
-    grad_log_p: BatchGradLogDensity,
-    *kernel_elem_args
+    kernel_elem: KernelFunction, grad_log_p: BatchGradLogDensity, *kernel_elem_args
 ) -> Callable[[BatchPtType], BatchPtType]:
-    kernel_grad_val = kernel_grad_and_value_factory(kernel_elem, which_argnum=1, *kernel_elem_args)
+    kernel_grad_val = kernel_grad_and_value_factory(
+        kernel_elem, which_argnum=1, *kernel_elem_args
+    )
 
     def svgd_step_dir(points: BatchPtType):
         # ASSUME SYMMETRY OF KERNEL
@@ -54,7 +54,7 @@ def svgd(
     is_log_density_batched: bool = False,
     grad_log_density: Optional[BatchGradLogDensity] = None,
     verbose: bool = False,
-    **unused_kwargs
+    **unused_kwargs,
 ):
     if verbose and len(unused_kwargs) > 0:
         warnings.warn("Unused kwargs:\n{}".format(unused_kwargs))
@@ -62,9 +62,7 @@ def svgd(
     if seed is not None:
         torch.manual_seed(seed)
 
-    particles = initialize_particles(
-        n_particles, dim, init_particles, device, bounds
-    )
+    particles = initialize_particles(n_particles, dim, init_particles, device, bounds)
 
     if keep_all:
         trajectories = torch.empty(
@@ -74,7 +72,9 @@ def svgd(
     else:
         trajectories = torch.empty(())
 
-    grad_log_p = batched_grad_log_density_factory(log_density, is_log_density_batched, grad_log_density)
+    grad_log_p = batched_grad_log_density_factory(
+        log_density, is_log_density_batched, grad_log_density
+    )
     step_fcn = create_svgd_step(kernel_elem, grad_log_p, kernel_length_scale)
 
     for idx in tqdm(range(n_steps), disable=not verbose):
