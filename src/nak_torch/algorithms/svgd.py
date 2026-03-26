@@ -11,9 +11,7 @@ import numpy as np
 import torch
 from typing import Optional, Callable
 from tqdm import tqdm
-from nak_torch.tools.kernel import sqexp_kernel_elem
-from jaxtyping import Float
-from torch import Tensor
+from nak_torch.tools.kernel import sqexp_kernel_elem, kernel_grad_and_value_factory
 from nak_torch.tools.types import KernelFunction, BatchGradLogDensity, BatchPtType
 from nak_torch.tools.util import batched_grad_log_density_factory, initialize_particles
 
@@ -21,20 +19,15 @@ from nak_torch.tools.util import batched_grad_log_density_factory, initialize_pa
 def create_svgd_step(
     kernel_elem: KernelFunction,
     grad_log_p: BatchGradLogDensity,
-    kernel_length_scale: float
+    *kernel_elem_args
 ) -> Callable[[BatchPtType], BatchPtType]:
-    kernel_grad_val = torch.func.grad_and_value(
-        lambda x, y: kernel_elem(x, y, kernel_length_scale), argnums=1
-    )
-    kernel_grad_val_vec = torch.vmap(
-        torch.vmap(kernel_grad_val, in_dims=(None, 0)),
-        in_dims=(0, None)
-    )
+    which_grad_argnum = 1
+    kernel_grad2_val = kernel_grad_and_value_factory(kernel_elem, which_grad_argnum, *kernel_elem_args)
 
     def svgd_step_dir(points: BatchPtType):
-        # kg[i,j,k] = grad_2(k) k(x_i, x_j), k[j,i] = k(x_i, x_j)
-        k_grad, k_eval = kernel_grad_val_vec(points, points)
-        # lpg[i,k] = grad(k) log_p(x_i)
+        # kg[i,j,ell] = grad_2(ell) k(x_i, x_j), k[j,i] = k(x_i, x_j)
+        k_grad, k_eval = kernel_grad2_val(points, points)
+        # lpg[i,ell] = grad(ell) log_p(x_i)
         log_p_grad_ev = grad_log_p(points)
         term_1 = k_eval.T @ log_p_grad_ev
         term_2 = k_grad.sum(1)

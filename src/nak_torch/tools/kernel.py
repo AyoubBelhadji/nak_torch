@@ -2,7 +2,7 @@ import torch
 from typing import Optional, Callable
 from jaxtyping import Float
 from torch import Tensor
-from .types import BatchType, KernelFunction, MatSelfKernelFunction, PtType, BatchPtType, KernelMatrixType, GradLogDensity, BatchGradLogDensity
+from .types import BatchType, KernelFunction, MatSelfKernelFunction, PtType, BatchPtType, KernelMatrixType, GradLogDensity, BatchGradLogDensity, GradKernelMatrixType
 
 __all__ = [
     "default_kernel_matrix",
@@ -11,6 +11,7 @@ __all__ = [
     "matricize_kernel_elem",
     "stein_kernel_mat_factory",
     "kernel_optimal_weight_factory",
+    "kernel_grad_and_value_factory",
     "kernel_elem_dict"
 ]
 
@@ -103,6 +104,18 @@ def stein_kernel_mat_factory(
         ev_term = torch.einsum("ij,id,jd->ij", eval_kernel, grad_log_p_eval1, grad_log_p_eval2)
         return trace_kernel + grad_term_1 + grad_term_2 + ev_term
     return torch.compile(stein_kernel_mat) if use_compiled else stein_kernel_mat
+
+def kernel_grad_and_value_factory(kernel_elem: KernelFunction, which_argnum: int, *kernel_args) -> Callable[
+    [BatchPtType, BatchPtType], tuple[GradKernelMatrixType, KernelMatrixType]
+]:
+    kernel_grad_val = torch.func.grad_and_value(
+        lambda x, y: kernel_elem(x, y, *kernel_args), argnums=which_argnum
+    )
+    kernel_grad_val_vec = torch.vmap(
+        torch.vmap(kernel_grad_val, in_dims=(None, 0)),
+        in_dims=(0, None)
+    )
+    return kernel_grad_val_vec
 
 kernel_elem_dict = {
     "sqexp": sqexp_kernel_elem

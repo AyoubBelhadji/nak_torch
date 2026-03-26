@@ -12,6 +12,7 @@ QuadruleWtType = Float[Tensor, "quad"]
 BatchQuadrulePtType = Float[Tensor, "batch quad d"]
 BatchQuadruleWtType = Float[Tensor, "batch quad"]
 KernelMatrixType = Float[Tensor, "batch batch"]
+GradKernelMatrixType = Float[Tensor, "batch batch d"]
 
 MSIPEstimatorOutput = tuple[BatchType, BatchPtType]
 
