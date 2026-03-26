@@ -771,6 +771,7 @@ def default_particle_integrator(
         icoeff: float = 0.5,
         dcoeff: float = 0.0,
         args: Optional[tuple] = None,
+        compile_step: bool = False
     ):
     batch_size, dtype, device = y0.shape[0], y0.dtype, y0.device
     if dtype == torch.float16:
@@ -797,4 +798,5 @@ def default_particle_integrator(
         return step(term, method, controller, state, running, dt, t, y, _args)
     running_0 = torch.ones(batch_size, dtype=torch.bool, device=device)
     state_0 = (method_state, controller_state)
-    return torch.compile(step_fcn), state_0, running_0, dt0_v, t0
+    ret_fcn = torch.compile(step_fcn) if compile_step else step_fcn
+    return ret_fcn, state_0, running_0, dt0_v, t0

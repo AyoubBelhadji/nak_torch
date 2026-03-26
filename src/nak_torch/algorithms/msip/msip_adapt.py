@@ -42,7 +42,8 @@ msip_map_used_keys = get_keywords(msip_map) + \
 def create_msip_diff(
         get_kernel_matrix: MatSelfKernelFunction,
         kernel_diag_infl: float,
-        msip_estimator: MSIPEstimator
+        msip_estimator: MSIPEstimator,
+        compile_step: bool
     ):
     def msip_diff(_, particles: BatchPtType, args):
         kernel_length_scale, = args
@@ -69,7 +70,7 @@ def create_msip_diff(
         )
 
         return particles_diff - particles
-    return torch.compile(msip_diff)
+    return torch.compile(msip_diff) if compile_step else msip_diff
 
 def msip_adapt(
     log_density: LogDensity | BatchLogDensity | MSIPEstimator,
@@ -91,6 +92,7 @@ def msip_adapt(
     choose_running: Optional[Callable[[BatchPtType, BatchType], BatchType]] = None,
     rtol: Optional[float] = None,
     atol: Optional[float] = None,
+    compile_step: bool = True,
     **msip_kwargs
 ):
     r"""
@@ -136,9 +138,13 @@ def msip_adapt(
         trajectories = torch.empty(())
         dts = torch.empty(())
 
-    msip_step = create_msip_diff(get_kernel_matrix, kernel_diag_infl, msip_estimator)
+    msip_step = create_msip_diff(get_kernel_matrix, kernel_diag_infl, msip_estimator, compile_step)
 
-    step_fcn, state, running, dt, t = default_particle_integrator(particles, msip_step, lr0, rtol=rtol, atol=atol, args=(kernel_length_scale,))
+    step_fcn, state, running, dt, t = default_particle_integrator(
+        particles, msip_step, lr0, rtol=rtol, atol=atol,
+        args=(kernel_length_scale,), compile_step=compile_step
+    )
+
     accepts = torch.zeros(n_particles, dtype=torch.int, device=device)
 
     for idx in tqdm(range(n_steps), disable=not verbose):
