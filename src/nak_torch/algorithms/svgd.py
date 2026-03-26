@@ -21,15 +21,17 @@ def create_svgd_step(
     grad_log_p: BatchGradLogDensity,
     *kernel_elem_args
 ) -> Callable[[BatchPtType], BatchPtType]:
-    which_grad_argnum = 1
-    kernel_grad2_val = kernel_grad_and_value_factory(kernel_elem, which_grad_argnum, *kernel_elem_args)
+    kernel_grad_val = kernel_grad_and_value_factory(kernel_elem, which_argnum=1, *kernel_elem_args)
 
     def svgd_step_dir(points: BatchPtType):
-        # kg[i,j,ell] = grad_2(ell) k(x_i, x_j), k[j,i] = k(x_i, x_j)
-        k_grad, k_eval = kernel_grad2_val(points, points)
-        # lpg[i,ell] = grad(ell) log_p(x_i)
+        # ASSUME SYMMETRY OF KERNEL
+        # kg[i,j,ell] = grad(x_j[ell]) k(x_i, x_j), k[i,j] = k(x_i, x_j)
+        k_grad, k_eval = kernel_grad_val(points, points)
+        # lpg[j,ell] = grad(x_j[ell]) log_p(x_j)
         log_p_grad_ev = grad_log_p(points)
-        term_1 = k_eval.T @ log_p_grad_ev
+        # term_1[i, ell] = sum_j k(i, j) grad(x_j[ell]) log_p(x_j)
+        term_1 = k_eval @ log_p_grad_ev
+        # term_2[i, ell] = sum_j grad(x_j[ell]) k(x_i, x_j)
         term_2 = k_grad.sum(1)
         return (term_1 + term_2) / points.shape[0]
 
