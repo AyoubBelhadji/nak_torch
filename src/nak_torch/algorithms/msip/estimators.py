@@ -92,9 +92,15 @@ class MSIPQuadGradientInformed(MSIPEstimator):
         particle_quad_pts = quad_pts.mul_(
             kernel_length_scale
         ).add(particles.unsqueeze(1)) # (N_part, N_quad, dim)
+        #print(particles)
+        #PP = particle_quad_pts.reshape(-1, particles.shape[1])
+        #print("PP shape:", PP.shape)
+        #test = self.log_dens_grad_val(PP[:1])  # try single row first
+        #print("single row output:", test)
         log_dens_grads, log_dens_evals = self.log_dens_grad_val(
             particle_quad_pts.reshape(-1, particles.shape[1])
         )
+        
         log_dens_grads = log_dens_grads.reshape_as(particle_quad_pts)
         log_dens_evals = log_dens_evals.reshape(particle_quad_pts.shape[:-1])
 

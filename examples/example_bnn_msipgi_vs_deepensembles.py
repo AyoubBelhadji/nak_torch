@@ -334,14 +334,14 @@ if __name__ == "__main__":
     HIDDEN_DIM   = 25        
     N_LAYERS     = 1          
     N_TRAIN      = 0.8        # train-test split ratio
-    N_PARTICLES  = 50
-    N_STEPS      = 100
+    N_PARTICLES  = 20
+    N_STEPS      = 5
     BETA         = 1.0        # beta in x-> exp(-beta^{-1}V(x))
     LAMBDA2      = 0.00005        # lambda in prior;0005
                               # lambda close to 0 means weak prior
-    LR_SVGD      = 50e-2
-    LR_MSIP      = 50e-2
-    SIGMA        = 5.5
+    LR_SVGD      = 10e-2
+    LR_MSIP      = 10e-2
+    SIGMA        = 2.5
 
     # Data loading
     X_train, Y_train, X_test, Y_test = load_dataset(
@@ -358,14 +358,15 @@ if __name__ == "__main__":
     dimension = obj_msip.total_numel
 
     # Shared inititializtion
-    init_particles = 5*torch.randn(N_PARTICLES, dimension).double()
+    init_particles = torch.randn(N_PARTICLES, dimension).double()
 
     # Run MSIP
-    post_log_dens_grad_val = torch.func.grad_and_value(obj_msip)
+    post_log_dens_grad_val = torch.func.vmap(torch.func.grad_and_value(obj_msip))
     
-    def mc_quad_rule(batch_size: int, N_quad: int = 5, dim: int = 2):
-        pts = torch.randn((batch_size, N_quad, dim))
-        wts = torch.ones((batch_size, N_quad)).div_(N_quad)
+    def mc_quad_rule(batch_size: int, N_quad: int = 100, dim: int = dimension):
+        #dim = dimension
+        pts = torch.randn((batch_size, N_quad, dim)).double()
+        wts = torch.ones((batch_size, N_quad)).div_(N_quad).double()
         return pts, wts
     
     
@@ -375,7 +376,7 @@ if __name__ == "__main__":
     # gradient_decay = 1.
     msip_quadgrad = MSIPQuadGradientInformed(
         post_log_dens_grad_val, mc_quad_rule,
-        1.0
+        0.5
     )
     
     # trajectories_msip_qg, traj_wts_msip_qg = msip(
@@ -397,8 +398,8 @@ if __name__ == "__main__":
         msip_quadgrad, N_PARTICLES, N_STEPS, dim=dimension,
         lr=LR_MSIP, init_particles=init_particles,
         kernel_length_scale=SIGMA, is_log_density_batched=True,
-        kernel_diag_infl=1e-1, bounds=(-100., 100.),
-        gradient_decay=0.005, keep_all=True,
+        kernel_diag_infl=1e-6, bounds=(-100., 100.),
+        gradient_decay=0.5, keep_all=True,
         compile_step=False, verbose=True,
     )
 
