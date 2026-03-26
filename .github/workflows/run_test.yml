@@ -17,9 +17,10 @@ jobs:
       - run: uv sync --locked --all-extras --dev
       - run: uv run ruff check src
       - run: uv run ruff format --check src
-      - run: uv run pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov=src tests/ | tee pytest-coverage.txt
-      - name: Coverage comment
-        uses: MishaKav/pytest-coverage-comment@v1
+      - run: uv run pytest --junitxml=pytest.xml --cov=nak_torch --cov-report=xml
+      - name: Publish pytest report
+        uses: sambyeol/publish-pytest-action@v2
+        if: ${{ always() }} # Even if the tests fail, publish the report
         with:
-          pytest-coverage-path: ./pytest-coverage.txt
-          junitxml-path: ./pytest.xml
+          junit-xml: pytest.xml
+          coverage-xml: coverage.xml
