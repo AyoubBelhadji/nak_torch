@@ -3,7 +3,12 @@ from .msip_greedy import msip_greedy
 from .msip_ni import msip_ni
 from .msip_geom_greedy import msip_geom_greedy
 from .msip_adapt import msip_adapt
-from .estimators import MSIPEstimator, MSIPQuadGradientFree, MSIPFredholm, MSIPQuadGradientInformed
+from .estimators import (
+    MSIPEstimator,
+    MSIPQuadGradientFree,
+    MSIPFredholm,
+    MSIPQuadGradientInformed,
+)
 
 __all__ = [
     "msip",
@@ -14,5 +19,5 @@ __all__ = [
     "MSIPEstimator",
     "MSIPQuadGradientFree",
     "MSIPFredholm",
-    "MSIPQuadGradientInformed"
+    "MSIPQuadGradientInformed",
 ]

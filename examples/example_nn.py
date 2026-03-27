@@ -22,7 +22,7 @@ def eval_function_trajectories(the_objective_function,the_trajectories):
 
 
 def plot_eval_tensor(the_eval_tensor):
-    fig = plt.figure()
+    _fig = plt.figure()
     T,M = the_eval_tensor.shape
     np_eval_tensor = the_eval_tensor.detach().numpy()
     for m in range(M):
@@ -31,7 +31,7 @@ def plot_eval_tensor(the_eval_tensor):
     plt.show()
 
 def plot_eval_best_tensor(the_eval_tensor):
-    fig = plt.figure()
+    _fig = plt.figure()
     T,M = the_eval_tensor.shape
     np_eval_tensor = the_eval_tensor.detach().numpy()
     np_eval_min_tensor = np.min(np_eval_tensor,1)
@@ -51,7 +51,7 @@ def plot_2D_classification_with_dataset_from_theta(theta,dataset_name, bounds, M
     x_train = torch.from_numpy(data["X"])
     y_train = torch.from_numpy(data["Y"]).view(-1)
 
-    model = sigma_pi(2, 1, 10, 1, 'ReLU').to(device)
+    model = sigma_pi(2, 1, 10, 1, 'ReLU').to(device) # noqa: F821 # type: ignore
     vector_to_parameters(torch.from_numpy(theta), model.parameters())
 
 
