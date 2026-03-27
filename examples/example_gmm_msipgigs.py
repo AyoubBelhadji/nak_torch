@@ -215,7 +215,7 @@ trajectories_msip, traj_wts_msip = msip(
 # %%
 
 
-def mc_quad_rule(batch_size: int, N_quad: int = 1000, dim: int = 2):
+def mc_quad_rule(batch_size: int, N_quad: int = 100, dim: int = 2):
     pts = torch.randn((batch_size, N_quad, dim))
     wts = torch.ones((batch_size, N_quad)).div_(N_quad)
     return pts, wts

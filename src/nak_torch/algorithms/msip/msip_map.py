@@ -8,7 +8,7 @@ from nak_torch.tools.types import KernelMatrixType, PtType, BatchPtType, \
     BatchType, MSIPEstimatorOutput
 
 
-@torch.compile
+#@torch.compile
 def calculate_msip_map(
         K_minus_one_i: BatchType,
         particles: BatchPtType,
